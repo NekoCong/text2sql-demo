@@ -1,0 +1,146 @@
+package com.nekocong.text2sql.tool;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nekocong.text2sql.datasource.DataSourceRegistry;
+import com.nekocong.text2sql.nl2sql.Text2SqlResult;
+import com.nekocong.text2sql.schema.SchemaIntrospector;
+import com.nekocong.text2sql.schema.SchemaRenderer;
+import com.nekocong.text2sql.schema.model.TableSchema;
+import com.nekocong.text2sql.service.Text2SqlPipelineService;
+import io.agentscope.core.tool.Tool;
+import io.agentscope.core.tool.ToolParam;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.stereotype.Component;
+
+/**
+ * AgentScope tools that expose the NL2SQL pipeline to the chat agent.
+ *
+ * <p>Deliberately high-level: the agent is given one authoritative
+ * {@code query_database} capability (which internally does schema grounding → generation →
+ * validation → execution) plus light read-only exploration helpers, rather than the raw
+ * list/describe/execute ladder that invites multi-hop, failure-prone loops.
+ *
+ * <p>All tools run on AgentScope's tool-worker threads, so the blocking pipeline call is safe here.
+ */
+@Component
+public class SqlTools {
+
+    private final DataSourceRegistry registry;
+    private final SchemaIntrospector introspector;
+    private final SchemaRenderer renderer;
+    private final Text2SqlPipelineService pipeline;
+    private final ObjectMapper objectMapper;
+
+    /**
+     * Creates the tools.
+     *
+     * @param registry the datasource registry
+     * @param introspector the schema introspector
+     * @param renderer the schema DDL renderer
+     * @param pipeline the NL2SQL pipeline
+     * @param objectMapper the shared Jackson mapper
+     */
+    public SqlTools(
+            DataSourceRegistry registry,
+            SchemaIntrospector introspector,
+            SchemaRenderer renderer,
+            Text2SqlPipelineService pipeline,
+            ObjectMapper objectMapper) {
+        this.registry = registry;
+        this.introspector = introspector;
+        this.renderer = renderer;
+        this.pipeline = pipeline;
+        this.objectMapper = objectMapper;
+    }
+
+    /**
+     * Lists the tables of a datasource.
+     *
+     * @param datasourceId datasource id (omit for the default)
+     * @return a comma-separated table list
+     */
+    @Tool(
+            name = "list_tables",
+            description = "List the tables available in a datasource.",
+            readOnly = true,
+            concurrencySafe = true)
+    public String listTables(
+            @ToolParam(
+                            name = "datasource_id",
+                            description = "Datasource id; omit for the default datasource",
+                            required = false)
+                    String datasourceId) {
+        return describeTables(datasourceId).stream()
+                .map(TableSchema::name)
+                .collect(Collectors.joining(", "));
+    }
+
+    /**
+     * Shows the DDL of a single table.
+     *
+     * @param table the table name
+     * @param datasourceId datasource id (omit for the default)
+     * @return the table DDL, or an error message listing available tables
+     */
+    @Tool(
+            name = "describe_table",
+            description = "Show the columns and foreign keys (DDL) of one table in a datasource.",
+            readOnly = true,
+            concurrencySafe = true)
+    public String describeTable(
+            @ToolParam(name = "table", description = "Table name") String table,
+            @ToolParam(
+                            name = "datasource_id",
+                            description = "Datasource id; omit for the default datasource",
+                            required = false)
+                    String datasourceId) {
+        List<TableSchema> tables = describeTables(datasourceId);
+        return tables.stream()
+                .filter(candidate -> candidate.name().equalsIgnoreCase(table))
+                .findFirst()
+                .map(renderer::renderTable)
+                .orElseGet(
+                        () ->
+                                "Unknown table '"
+                                        + table
+                                        + "'. Available tables: "
+                                        + tables.stream().map(TableSchema::name).collect(Collectors.joining(", ")));
+    }
+
+    /**
+     * Answers a data question by generating and running a read-only SQL query.
+     *
+     * @param question the natural-language data question
+     * @param datasourceId datasource id (omit for the default)
+     * @return the SQL and result rows as JSON
+     */
+    @Tool(
+            name = "query_database",
+            description =
+                    "Answer a natural-language data question by generating and executing a read-only "
+                            + "SQL query, returning the SQL and result rows as JSON. Prefer this over "
+                            + "writing SQL yourself.",
+            readOnly = true,
+            concurrencySafe = false)
+    public String queryDatabase(
+            @ToolParam(name = "question", description = "The natural-language data question")
+                    String question,
+            @ToolParam(
+                            name = "datasource_id",
+                            description = "Datasource id; omit for the default datasource",
+                            required = false)
+                    String datasourceId) {
+        Text2SqlResult result = pipeline.runBlocking(null, datasourceId, question);
+        try {
+            return objectMapper.writeValueAsString(result);
+        } catch (JsonProcessingException ex) {
+            return "{\"sql\":\"" + result.sql().replace("\"", "'") + "\",\"error\":\"failed to serialize result\"}";
+        }
+    }
+
+    private List<TableSchema> describeTables(String datasourceId) {
+        return introspector.introspect(registry.resolve(datasourceId));
+    }
+}

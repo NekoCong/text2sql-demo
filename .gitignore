@@ -1,0 +1,39 @@
+# ── OS / Editor ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# ── Java / Maven (text2sql-backend) ─────────────────────────
+target/
+**/target/
+*.class
+hs_err_pid*
+.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+
+# ── Node / Vite (text2sql-frontend) ─────────────────────────
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# ── Env / secrets ───────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── AgentScope runtime state ────────────────────────────────
+.agentscope/
+
+# ── Logs ────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Agent / tooling state ───────────────────────────────────
+.omo/
+.codegraph/

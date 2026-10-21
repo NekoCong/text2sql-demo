@@ -1,0 +1,32 @@
+:root {
+  font-family:
+    'Inter', 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+  line-height: 1.5;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--el-fill-color-lighter, #f5f7fa);
+}
+
+/* Let the chat card fill the main area. */
+.layout__main > * {
+  flex: 1;
+  min-height: 0;
+}
+
+.chat {
+  padding: 16px;
+  height: 100%;
+}

@@ -1,0 +1,67 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    title?: string
+    /** Routes reachable without a session (the login page). */
+    public?: boolean
+  }
+}
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [
+    {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/views/LoginView.vue'),
+      meta: { title: '登录', public: true },
+    },
+    {
+      path: '/',
+      name: 'chat',
+      component: () => import('@/views/ChatView.vue'),
+      meta: { title: '对话' },
+    },
+    {
+      path: '/datasources',
+      name: 'datasources',
+      component: () => import('@/views/DataSourcesView.vue'),
+      meta: { title: '数据源' },
+    },
+    {
+      path: '/settings/models',
+      name: 'model-settings',
+      component: () => import('@/views/ModelSettingsView.vue'),
+      meta: { title: '模型配置' },
+    },
+    {
+      path: '/about',
+      name: 'about',
+      component: () => import('@/views/AboutView.vue'),
+      meta: { title: '关于' },
+    },
+  ],
+})
+
+// Session guard: rehydrate the auth store (so a page refresh keeps the session), send
+// guests to /login and keep signed-in users out of it.
+router.beforeEach(async (to) => {
+  const auth = useAuthStore()
+  await auth.restore()
+  if (to.meta.public !== true && !auth.isAuthenticated) {
+    return { name: 'login' }
+  }
+  if (to.meta.public === true && auth.isAuthenticated) {
+    return { name: 'chat' }
+  }
+  return true
+})
+
+router.afterEach((to) => {
+  const title = to.meta.title
+  document.title = title ? `${title} · Text2SQL` : 'Text2SQL'
+})
+
+export default router

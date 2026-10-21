@@ -1,0 +1,49 @@
+# Local all-in-one OpenTelemetry backend for the Text2SQL demo.
+#
+# grafana/otel-lgtm bundles an OTLP collector + Prometheus + Tempo + Loki + Grafana
+# in a single container, so no separate collector config is needed.
+#
+#   Grafana UI : http://localhost:3000   (anonymous admin access, no login)
+#   OTLP HTTP  : http://localhost:4318   (v1/traces, v1/metrics -> matches application.yaml)
+#   OTLP gRPC  : localhost:4317
+#   Prometheus : http://localhost:9090   (exposed for debugging)
+#
+# Also provides MySQL for the application database (users / conversations / model configs).
+#   MySQL      : localhost:3306          (root / root, database `text2sql`)
+#
+# Start:  docker compose up -d
+# Stop:   docker compose down
+services:
+  otel-lgtm:
+    image: grafana/otel-lgtm:latest
+    container_name: text2sql-otel-lgtm
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "9090:9090"   # Prometheus (debugging)
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.4
+    container_name: text2sql-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: text2sql
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    ports:
+      - "3306:3306"
+    volumes:
+      - text2sql-mysql-data:/var/lib/mysql
+      # The application schema (users / model_config / conversation / message) is provisioned here,
+      # so the MySQL database is fully defined by docker-compose.
+      - ./text2sql-backend/src/main/resources/db/app-schema.sql:/docker-entrypoint-initdb.d/01-app-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  text2sql-mysql-data:

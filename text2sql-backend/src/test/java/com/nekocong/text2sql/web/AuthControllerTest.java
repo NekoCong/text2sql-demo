@@ -1,0 +1,103 @@
+package com.nekocong.text2sql.web;
+
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.reactive.server.WebTestClient;
+
+/**
+ * End-to-end authentication tests: registration, login, current-user, and access control on a
+ * protected endpoint.
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+class AuthControllerTest {
+
+    @LocalServerPort
+    private int port;
+
+    private WebTestClient client;
+
+    @BeforeEach
+    void setUp() {
+        client = WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
+    }
+
+    @Test
+    void registerLoginAndMe() {
+        String username = "u" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        client.post()
+                .uri("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("username", username, "password", "secret123", "displayName", "Alice"))
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody()
+                .jsonPath("$.token")
+                .isNotEmpty()
+                .jsonPath("$.user.username")
+                .isEqualTo(username);
+
+        String token = TestAuth.login(client, username, "secret123");
+
+        client.get()
+                .uri("/api/auth/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.username")
+                .isEqualTo(username);
+    }
+
+    @Test
+    void duplicateUsernameIsRejected() {
+        String username = "u" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        Map<String, String> body =
+                Map.of("username", username, "password", "secret123", "displayName", "Bob");
+        client.post()
+                .uri("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .exchange()
+                .expectStatus()
+                .isCreated();
+        client.post()
+                .uri("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409);
+    }
+
+    @Test
+    void wrongPasswordIsRejected() {
+        String username = "u" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        client.post()
+                .uri("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("username", username, "password", "secret123"))
+                .exchange()
+                .expectStatus()
+                .isCreated();
+        client.post()
+                .uri("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("username", username, "password", "wrong-password"))
+                .exchange()
+                .expectStatus()
+                .isUnauthorized();
+    }
+
+    @Test
+    void protectedEndpointRequiresToken() {
+        client.get().uri("/api/conversations").exchange().expectStatus().isUnauthorized();
+    }
+}

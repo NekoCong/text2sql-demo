@@ -1,0 +1,116 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: text2sql-backend
+  # --- Application database (users, model configs, conversations, messages) ---
+  # Reactive via Spring Data R2DBC (MySQL by default; tests use H2 via the `test` profile).
+  r2dbc:
+    url: "${APP_DB_R2DBC_URL:r2dbc:mysql://localhost:3306/text2sql}"
+    username: "${APP_DB_USERNAME:root}"
+    password: "${APP_DB_PASSWORD:root}"
+  sql:
+    init:
+      # The MySQL schema is provisioned by docker-compose. Set APP_DB_INIT_MODE=always to let the
+      # app create tables itself (idempotent) when pointing at an external MySQL.
+      mode: "${APP_DB_INIT_MODE:never}"
+      schema-locations: classpath:db/app-schema.sql
+  # Propagate the tracing/observation context across Reactor operators so trace IDs
+  # reach the MDC (logs) and downstream calls on the WebFlux stack. Default is "limited".
+  reactor:
+    context-propagation: auto
+
+# AgentScope text-to-SQL agent configuration.
+# The model reads its API key from the matching environment variable, e.g. DASHSCOPE_API_KEY.
+text2sql:
+  # --- JDBC datasources (multi-datasource, config-switchable) ---
+  # Each entry becomes a cached Hikari pool; the agent queries a datasource by `id`.
+  datasources:
+    default-id: demo
+    items:
+      - id: demo
+        name: Demo E-commerce (H2)
+        driver: org.h2.Driver
+        url: "jdbc:h2:mem:text2sql;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE"
+        username: sa
+        password: ""
+        dialect: H2
+        seed: true
+      # --- Example: enable a MySQL datasource by uncommenting and adjusting ---
+      # - id: mysql-demo
+      #   name: Local MySQL
+      #   driver: com.mysql.cj.jdbc.Driver
+      #   url: "jdbc:mysql://localhost:3306/demo?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+      #   username: root
+      #   password: secret
+      #   dialect: MYSQL
+      #   seed: false
+
+  # --- NL2SQL pipeline limits (safety) ---
+  nl2sql:
+    row-limit: 200            # maximum rows returned to the UI per query
+    timeout-seconds: 15       # per-statement query timeout
+    schema-char-budget: 3000  # approximate schema characters injected into the prompt
+
+  # --- Embedding-based schema retrieval (RAG) ---
+  # Disabled by default (the demo schema is small; full-schema grounding is optimal and key-free).
+  # Enable + set DASHSCOPE_API_KEY to switch `FullSchemaProvider` out for `RagSchemaProvider`.
+  rag:
+    enabled: false
+    provider: dashscope
+    embedding-model: "${TEXT2SQL_EMBEDDING_MODEL:text-embedding-v3}"
+    dimensions: 1024
+    top-k: 4
+    score-threshold: 0.0
+
+  # --- In-memory knowledge base (document ingest + retrieval) ---
+  # Semantic when rag.enabled=true (needs an embedding key); lexical otherwise.
+  knowledge:
+    chunk-size: 800
+    top-k: 5
+
+  agent:
+    name: Text2SqlAgent
+    model: "${TEXT2SQL_MODEL:dashscope:qwen-plus}"
+    workspace: "${TEXT2SQL_WORKSPACE:./agentscope/workspace}"
+    max-context-tokens: 8000
+    # Register the multi-agent team (schema_explorer / sql_runner / report_writer) as subagents the
+    # parent agent can delegate to via AgentScope subagents.
+    subagents-enabled: true
+    # Prompt files live under resources/prompts/ (see prompts/README.md); override with an inline
+    # `sys-prompt` if needed.
+    sys-prompt-file: prompts/agent-system.md
+
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  # --- OpenTelemetry / OTLP (Spring Boot 4.1) ---
+  # Traces: Micrometer Tracing -> micrometer-tracing-bridge-otel -> OTLP exporter.
+  # NOTE: in 4.x the endpoint has NO default; set it (or rely on a service connection).
+  opentelemetry:
+    resource-attributes:
+      service.name: "${spring.application.name}"
+    tracing:
+      export:
+        otlp:
+          endpoint: "${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}"
+          # transport: http          # http (default) | grpc
+          # compression: gzip        # none (default) | gzip
+  # Metrics: Micrometer's OTLP registry (its endpoint defaults to http://localhost:4318/v1/metrics).
+  otlp:
+    metrics:
+      export:
+        url: "${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}"
+  tracing:
+    sampling:
+      # 100% in dev; the Spring Boot default is 0.1 (10%).
+      probability: "${TRACING_SAMPLING_PROBABILITY:1.0}"
+logging:
+  level:
+    io.agentscope: INFO
