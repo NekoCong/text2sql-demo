@@ -18,6 +18,12 @@
 -- against an existing database without creating duplicates.
 --
 -- Not wired into spring.sql.init, so the H2 test profile stays free of seed rows.
+--
+-- IMPORTANT: pin the connection charset before any data statement. The MySQL container's entrypoint
+-- pipes this file into the `mysql` CLI, which under a POSIX/C locale defaults its connection charset
+-- to latin1. Without this line the UTF-8 bytes below are reinterpreted as latin1 and stored
+-- double-encoded ("管理" turns into "ç®¡ç†...").
+SET NAMES utf8mb4;
 
 -- --- Users -------------------------------------------------------------------------------------
 INSERT IGNORE INTO app_user (id, username, password_hash, display_name, role, created_at) VALUES
