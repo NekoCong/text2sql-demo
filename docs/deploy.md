@@ -101,21 +101,52 @@ ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 -L 3306:127.0.0.1:3306 <user>@
 # 然后本地浏览器打开 http://localhost:3000
 ```
 
-### 2.3 代码
+### 2.3 代码怎么上服务器
 
-仓库远端：`https://github.com/NekoCong/text2sql-demo.git`
+仓库远端：`https://github.com/NekoCong/text2sql-demo.git` —— **这是私有仓库**，而服务器上没有
+GitHub 凭据，所以直接 `git clone` 会失败：
 
-服务器上执行前，**先把本地改动推到远端**，否则服务器 clone 到的还是旧代码。
+```
+fatal: could not read Username for 'https://github.com': No such device or address
+```
+
+两条路，任选其一：
+
+**A. 配好凭据，走 `git clone`（恢复链路最干净）**
+- 把仓库改成 public，或
+- 给仓库加一个只读 Deploy Key，并把对应私钥放在本机 `C:\secretkey\` 与服务器 `.pem` 一起保管
+
+之后 `git clone` 可用，§5 的恢复流程完全成立。
+
+**B. 直接打包传输（**当前实际采用的方式**，不需要任何凭据）**
+
+在**有代码的本机**执行：
+
+```powershell
+tar -czf "$env:TEMP\repo.tgz" --exclude=.git --exclude=.idea --exclude=node_modules --exclude=target --exclude=dist -C <仓库路径> .
+scp -i <密钥.pem> "$env:TEMP\repo.tgz" root@<服务器IP>:/tmp/repo.tgz
+```
+
+在**服务器**上执行：
+
+```bash
+mkdir -p /root/text2sql-demo
+tar -xzf /tmp/repo.tgz -C /root/text2sql-demo
+```
+
+> 这条路径下服务器上没有 `.git`，`git pull` 不可用；恢复时必须重新打包传输。
+> 重新解包时**不要** `rm -rf` 整个目录，否则会连 `deploy/.env`（密钥）一起删掉。
 
 ---
 
 ## 3. 从零部署
 
 ```bash
-# 1) 装 git（若镜像没有）并拉代码
+# 1) 把代码放到 /root/text2sql-demo（私有仓库，走 §2.3 的打包传输）
 sudo apt-get update && sudo apt-get install -y git    # RHEL 系用 dnf
-git clone https://github.com/NekoCong/text2sql-demo.git
-cd text2sql-demo
+mkdir -p /root/text2sql-demo
+tar -xzf /tmp/repo.tgz -C /root/text2sql-demo
+cd /root/text2sql-demo
 
 # 2) 准备密钥
 cp deploy/.env.example deploy/.env
@@ -181,8 +212,10 @@ curl -s -X POST http://127.0.0.1/api/auth/login \
 
 ```bash
 # 新机器上（IP 可能已经变了）
-git clone https://github.com/NekoCong/text2sql-demo.git
-cd text2sql-demo
+# 代码按 §2.3-B 打包传入（私有仓库），或按 §2.3-A 配好凭据后 git clone
+mkdir -p /root/text2sql-demo
+tar -xzf /tmp/repo.tgz -C /root/text2sql-demo
+cd /root/text2sql-demo
 cp deploy/.env.example deploy/.env   # 重新填密钥
 sudo bash deploy/bootstrap.sh
 ```
@@ -245,3 +278,38 @@ Docker 构建不受影响（镜像里自带 JDK 25）。
 | `text2sql-frontend/nginx.conf` | SPA 回退 + `/api` 反代 + SSE 关缓冲 |
 | `docker-compose.yml` | **本地**只用基础设施（MySQL + otel-lgtm），不含应用容器 |
 | `text2sql-backend/src/main/resources/db/app-data.sql` | 种子数据：admin / alice / bob + 会话 |
+
+---
+
+## 9. 本次部署记录（2026-10-23）
+
+留作对照：下次恢复后应当看到同样的结果。
+
+| 项 | 值 |
+| --- | --- |
+| 主机 | 阿里云 ECS，Ubuntu 26.04.1 LTS，8 vCPU / 30 GB / 49 GB |
+| Docker | 29.1.3（Ubuntu 系统包 `docker.io`） |
+| Docker Compose | 2.40.3（`docker-compose-v2`） |
+| 代码 | tarball 传输，无 `.git`（见 §2.3-B） |
+| 镜像 | 全部来自华为云 SWR（见 §1.1） |
+| MySQL root 密码 | `root`（`deploy/.env`，mode 600） |
+| JWT 密钥 | 随机生成，未记录、无需人工持有 |
+
+验收结果（全部通过）：
+
+```
+容器          4/4 running，restart 计数均为 0
+公网监听      仅 22 与 80；3306/3000/4317/4318/9090 均绑定 127.0.0.1
+ufw           active，仅放行 22/tcp、80/tcp
+外网访问      http://<服务器IP>/                       -> 200
+              http://<服务器IP>/api/text2sql/health     -> 200 OK
+未带 token    GET /api/auth/me                 -> 401
+种子账号      admin  role=admin  可见会话 4 条
+              alice  role=user   可见会话 2 条
+              bob    role=user   可见会话 1 条
+数据范围      alice -> bob 的会话 -> 404（拒绝）
+              admin -> bob 的会话 -> 200（放行）
+```
+
+> 已知小问题：`bootstrap.sh` 结尾用 `api.ipify.org` 探测公网 IP，但该域名在本网络不可达，
+> 所以最后打印的是 `http://<server-ip>/` 占位符。不影响部署，实际地址见上表。
