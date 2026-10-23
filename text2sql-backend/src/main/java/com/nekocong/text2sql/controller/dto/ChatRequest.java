@@ -3,12 +3,14 @@ package com.nekocong.text2sql.controller.dto;
 /**
  * Request body for the synchronous text-to-SQL endpoint.
  *
+ * <p>The caller identity is always taken from the bearer token; there is deliberately no user field
+ * in the body, so a client cannot act on behalf of another account.
+ *
  * @param message the natural-language question
  * @param sessionId optional session identifier (defaults to {@code "default"})
- * @param userId optional user identifier (defaults to {@code "anonymous"})
  * @param datasourceId optional datasource id (defaults to the configured default datasource)
  */
-public record ChatRequest(String message, String sessionId, String userId, String datasourceId) {
+public record ChatRequest(String message, String sessionId, String datasourceId) {
 
     /**
      * Returns a non-blank session id.
@@ -17,14 +19,5 @@ public record ChatRequest(String message, String sessionId, String userId, Strin
      */
     public String sessionIdOrDefault() {
         return (sessionId == null || sessionId.isBlank()) ? "default" : sessionId;
-    }
-
-    /**
-     * Returns a non-blank user id.
-     *
-     * @return the user id or {@code "anonymous"}
-     */
-    public String userIdOrDefault() {
-        return (userId == null || userId.isBlank()) ? "anonymous" : userId;
     }
 }

@@ -1,24 +1,33 @@
 package com.nekocong.text2sql.config;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.nekocong.text2sql.security.Roles;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.web.server.authentication.ServerBearerTokenAuthenticationConverter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 /**
  * Spring Security (WebFlux) configuration: stateless JWT bearer authentication.
@@ -27,6 +36,10 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
  * Everything else requires a valid JWT. The token is read from the {@code Authorization: Bearer ...}
  * header, or from an {@code access_token} URI query parameter (needed because the browser
  * {@code EventSource} used for SSE cannot set headers).
+ *
+ * <p>The {@code role} claim is mapped to a {@code ROLE_ADMIN} / {@code ROLE_USER} authority so the
+ * role is available on the {@code Authentication}. Row-level data scoping (who may read which
+ * conversation) is enforced in the service layer, which receives the role explicitly.
  */
 @Configuration
 @EnableWebFluxSecurity
@@ -65,8 +78,24 @@ public class SecurityConfig {
                 .oauth2ResourceServer(
                         oauth2 ->
                                 oauth2.bearerTokenConverter(bearerTokenConverter)
-                                        .jwt(Customizer.withDefaults()));
+                                        .jwt(jwt -> jwt.jwtAuthenticationConverter(roleAuthenticationConverter())));
         return http.build();
+    }
+
+    /**
+     * Maps the JWT {@code role} claim to a single granted authority.
+     *
+     * @return the converter
+     */
+    @Bean
+    Converter<Jwt, Mono<AbstractAuthenticationToken>> roleAuthenticationConverter() {
+        ReactiveJwtAuthenticationConverter converter = new ReactiveJwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(
+                jwt ->
+                        Flux.just(
+                                new SimpleGrantedAuthority(
+                                        "ROLE_" + Roles.normalize(jwt.getClaimAsString(Roles.CLAIM)).toUpperCase(Locale.ROOT))));
+        return converter;
     }
 
     /**

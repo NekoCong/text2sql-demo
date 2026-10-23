@@ -35,9 +35,12 @@ services:
       - "3306:3306"
     volumes:
       - text2sql-mysql-data:/var/lib/mysql
-      # The application schema (users / model_config / conversation / message) is provisioned here,
-      # so the MySQL database is fully defined by docker-compose.
+      # The application schema (users / model_config / conversation / message) and the seed data
+      # (admin + alice + bob with their conversations) are provisioned here, so the MySQL database
+      # is fully defined by docker-compose. Init scripts only run on an empty data directory; to
+      # re-seed, `docker compose down -v` first.
       - ./text2sql-backend/src/main/resources/db/app-schema.sql:/docker-entrypoint-initdb.d/01-app-schema.sql:ro
+      - ./text2sql-backend/src/main/resources/db/app-data.sql:/docker-entrypoint-initdb.d/02-app-data.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
       interval: 10s

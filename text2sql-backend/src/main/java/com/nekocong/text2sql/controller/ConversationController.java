@@ -6,6 +6,7 @@ import com.nekocong.text2sql.conversation.ConversationMessage;
 import com.nekocong.text2sql.controller.dto.ConversationMessageView;
 import com.nekocong.text2sql.controller.dto.ConversationRequest;
 import com.nekocong.text2sql.controller.dto.ConversationView;
+import com.nekocong.text2sql.security.Roles;
 import com.nekocong.text2sql.service.ConversationService;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -24,7 +25,10 @@ import reactor.core.publisher.Mono;
 
 /**
  * Controller layer for conversation management (the left-hand history tree). Delegates to
- * {@link ConversationService}. All operations are scoped to the authenticated user.
+ * {@link ConversationService}.
+ *
+ * <p>Reads and writes are scoped to the caller: an admin sees every conversation, a regular user
+ * only its own.
  */
 @RestController
 @RequestMapping("/api/conversations")
@@ -45,14 +49,17 @@ public class ConversationController {
     }
 
     /**
-     * Lists the current user's conversations.
+     * Lists the conversations visible to the caller.
      *
      * @param jwt the bearer token
      * @return the conversations
      */
     @GetMapping
     public Mono<List<ConversationView>> list(@AuthenticationPrincipal Jwt jwt) {
-        return conversations.list(jwt.getSubject()).map(ConversationView::of).collectList();
+        return conversations
+                .list(jwt.getSubject(), Roles.isAdmin(jwt))
+                .map(ConversationView::of)
+                .collectList();
     }
 
     /**
@@ -87,9 +94,10 @@ public class ConversationController {
     public Mono<ConversationView> rename(
             @AuthenticationPrincipal Jwt jwt, @PathVariable String id, @RequestBody ConversationRequest request) {
         String userId = jwt.getSubject();
+        boolean isAdmin = Roles.isAdmin(jwt);
         return conversations
-                .rename(id, userId, request.title())
-                .then(conversations.requireOwned(id, userId))
+                .rename(id, userId, isAdmin, request.title())
+                .then(conversations.requireAccessible(id, userId, isAdmin))
                 .map(ConversationView::of);
     }
 
@@ -103,7 +111,7 @@ public class ConversationController {
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> delete(@AuthenticationPrincipal Jwt jwt, @PathVariable String id) {
-        return conversations.delete(id, jwt.getSubject());
+        return conversations.delete(id, jwt.getSubject(), Roles.isAdmin(jwt));
     }
 
     /**
@@ -116,7 +124,10 @@ public class ConversationController {
     @GetMapping("/{id}/messages")
     public Mono<List<ConversationMessageView>> messages(
             @AuthenticationPrincipal Jwt jwt, @PathVariable String id) {
-        return conversations.messages(id, jwt.getSubject()).map(this::toView).collectList();
+        return conversations
+                .messages(id, jwt.getSubject(), Roles.isAdmin(jwt))
+                .map(this::toView)
+                .collectList();
     }
 
     private ConversationMessageView toView(ConversationMessage message) {

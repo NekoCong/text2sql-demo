@@ -13,7 +13,9 @@ import org.springframework.stereotype.Component;
 /**
  * Issues signed JWTs for authenticated users.
  *
- * <p>The token subject is the user id; a {@code username} claim is included for convenience.
+ * <p>The token subject is the user id; {@code username} and {@code role} claims are included for
+ * convenience. The role is a snapshot taken at sign-in time, so a role change only takes effect
+ * after the user signs in again.
  */
 @Component
 public class JwtService {
@@ -37,15 +39,17 @@ public class JwtService {
      *
      * @param userId the user id (token subject)
      * @param username the username claim
+     * @param role the role claim ({@code admin} or {@code user})
      * @return the compact JWT
      */
-    public String issue(String userId, String username) {
+    public String issue(String userId, String username, String role) {
         Instant now = Instant.now();
         JwtClaimsSet claims =
                 JwtClaimsSet.builder()
                         .issuer(properties.getIssuer())
                         .subject(userId)
                         .claim("username", username)
+                        .claim(Roles.CLAIM, Roles.normalize(role))
                         .issuedAt(now)
                         .expiresAt(now.plus(properties.getTokenTtlMinutes(), ChronoUnit.MINUTES))
                         .build();

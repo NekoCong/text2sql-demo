@@ -2,6 +2,7 @@ package com.nekocong.text2sql.service;
 
 import com.nekocong.text2sql.repository.UserRepository;
 import com.nekocong.text2sql.security.JwtService;
+import com.nekocong.text2sql.security.Roles;
 import com.nekocong.text2sql.user.AppUser;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,6 +17,10 @@ import reactor.core.scheduler.Schedulers;
  * <p>Owns the business rules (uniqueness, password policy, credential verification); persistence is
  * delegated to {@link UserRepository} and token issuance to {@link JwtService}. CPU-bound password
  * hashing runs on a bounded-elastic scheduler so it never blocks the event loop.
+ *
+ * <p>Self-service registration always creates a {@link Roles#USER}; elevated roles are assigned out
+ * of band (seed SQL or a direct database update), so the registration endpoint cannot be used for
+ * privilege escalation.
  */
 @Service
 public class AuthService {
@@ -67,8 +72,8 @@ public class AuthService {
                                     Mono.defer(
                                             () ->
                                                     encode(secret)
-                                                            .flatMap(hash -> users.insert(name, hash, display))
-                                                            .map(user -> issue(user.id(), name, display))));
+                                                            .flatMap(hash -> users.insert(name, hash, display, Roles.USER))
+                                                            .map(this::issue)));
                 });
     }
 
@@ -86,7 +91,7 @@ public class AuthService {
                         user ->
                                 verify(password, user)
                                         .filter(Boolean::booleanValue)
-                                        .map(ok -> issue(user.id(), user.username(), user.displayName()))
+                                        .map(ok -> issue(user))
                                         .switchIfEmpty(Mono.error(invalidCredentials())));
     }
 
@@ -112,8 +117,14 @@ public class AuthService {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
-    private AuthResult issue(String id, String username, String displayName) {
-        return new AuthResult(jwtService.issue(id, username), jwtService.ttlSeconds(), id, username, displayName);
+    private AuthResult issue(AppUser user) {
+        return new AuthResult(
+                jwtService.issue(user.id(), user.username(), user.role()),
+                jwtService.ttlSeconds(),
+                user.id(),
+                user.username(),
+                user.displayName(),
+                Roles.normalize(user.role()));
     }
 
     private static String require(String value, String message) {

@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS app_user (
     username      VARCHAR(64)  NOT NULL,
     password_hash VARCHAR(100) NOT NULL,
     display_name  VARCHAR(100),
+    -- Role name: 'admin' sees every conversation, 'user' only its own rows. Assigned out of band
+    -- (seed SQL or a direct update); self-service registration always inserts 'user'.
+    role          VARCHAR(32)  NOT NULL DEFAULT 'user',
     created_at    BIGINT       NOT NULL,
     CONSTRAINT uk_user_username UNIQUE (username)
 );

@@ -10,6 +10,7 @@ import com.nekocong.text2sql.nl2sql.SqlEvent;
 import com.nekocong.text2sql.nl2sql.StepEvent;
 import com.nekocong.text2sql.nl2sql.Text2SqlEvent;
 import com.nekocong.text2sql.nl2sql.Text2SqlResult;
+import com.nekocong.text2sql.security.Roles;
 import com.nekocong.text2sql.service.ConversationService;
 import com.nekocong.text2sql.service.Text2SqlAgentService;
 import com.nekocong.text2sql.service.Text2SqlPipelineService;
@@ -81,11 +82,12 @@ public class Text2SqlController {
             @RequestParam(required = false) String conversationId) {
 
         String userId = jwt.getSubject();
+        boolean isAdmin = Roles.isAdmin(jwt);
         AtomicReference<SqlEvent> sqlRef = new AtomicReference<>();
         AtomicReference<RowsEvent> rowsRef = new AtomicReference<>();
         AtomicReference<ChartEvent> chartRef = new AtomicReference<>();
 
-        return resolveConversation(userId, conversationId, datasourceId, message)
+        return resolveConversation(userId, isAdmin, conversationId, datasourceId, message)
                 .flatMapMany(
                         convo -> {
                             Flux<ServerSentEvent<String>> head =
@@ -143,8 +145,13 @@ public class Text2SqlController {
             @RequestParam String message,
             @RequestParam(defaultValue = "default") String sessionId) {
         String userId = jwt.getSubject();
+        // AgentScope keeps the agent session state in the shared workspace directory, and the
+        // default session id here is a single shared "default". Namespacing by the authenticated
+        // user keeps one account from resuming another account's agent session (the same rule the
+        // conversation endpoints enforce), and stops every user from sharing one session.
+        String scopedSessionId = userId + ":" + sessionId;
         return agentService
-                .stream(message, sessionId, userId)
+                .stream(message, scopedSessionId, userId)
                 .filter(event -> event instanceof TextBlockDeltaEvent)
                 .map(event -> sse("delta", ((TextBlockDeltaEvent) event).getDelta()))
                 .concatWith(Mono.just(sse("done", "[DONE]")))
@@ -162,10 +169,10 @@ public class Text2SqlController {
     }
 
     private Mono<Conversation> resolveConversation(
-            String userId, String conversationId, String datasourceId, String message) {
+            String userId, boolean isAdmin, String conversationId, String datasourceId, String message) {
         if (conversationId != null && !conversationId.isBlank()) {
             return conversations
-                    .requireOwned(conversationId, userId)
+                    .requireAccessible(conversationId, userId, isAdmin)
                     .flatMap(
                             convo -> conversations.appendUserMessage(convo.id(), message).thenReturn(convo));
         }

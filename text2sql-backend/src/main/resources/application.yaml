@@ -24,6 +24,15 @@ spring:
 # AgentScope text-to-SQL agent configuration.
 # The model reads its API key from the matching environment variable, e.g. DASHSCOPE_API_KEY.
 text2sql:
+  # --- Security (JWT signing) ---
+  # `jwtSecret` is a JavaBean field on SecurityProperties (prefix `text2sql.security`), so relaxed
+  # binding alone would look for TEXT2SQL_SECURITY_JWTSECRET. This explicit placeholder is what makes
+  # the documented TEXT2SQL_JWT_SECRET variable actually take effect; without it a shared deployment
+  # would silently keep signing tokens with the built-in demo key below, which is public in this
+  # repository and therefore lets anyone mint an admin token.
+  security:
+    jwt-secret: "${TEXT2SQL_JWT_SECRET:text2sql-demo-jwt-secret-change-me-please-32bytes+}"
+
   # --- JDBC datasources (multi-datasource, config-switchable) ---
   # Each entry becomes a cached Hikari pool; the agent queries a datasource by `id`.
   datasources:

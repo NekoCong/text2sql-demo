@@ -70,13 +70,13 @@ public class AuthController {
     public Mono<UserView> me(@AuthenticationPrincipal Jwt jwt) {
         return authService
                 .requireUser(jwt.getSubject())
-                .map(user -> new UserView(user.id(), user.username(), user.displayName()));
+                .map(user -> new UserView(user.id(), user.username(), user.displayName(), user.role()));
     }
 
     private static AuthResponse toResponse(AuthResult result) {
         return new AuthResponse(
                 result.token(),
                 result.expiresIn(),
-                new UserView(result.userId(), result.username(), result.displayName()));
+                new UserView(result.userId(), result.username(), result.displayName(), result.role()));
     }
 }

@@ -1,0 +1,8 @@
+# Shell scripts must keep LF line endings. CRLF makes bash fail on Linux with
+# "$'\r': command not found", which would break deploy/bootstrap.sh on the server.
+*.sh text eol=lf
+
+# Files consumed by Linux tooling inside the images.
+Dockerfile text eol=lf
+*.dockerignore text eol=lf
+nginx.conf text eol=lf

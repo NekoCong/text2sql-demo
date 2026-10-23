@@ -13,6 +13,9 @@ import reactor.core.publisher.Mono;
 @Repository
 public class ConversationRepository {
 
+    private static final String COLUMNS =
+            "id, user_id, title, datasource_id, model_config_id, created_at, updated_at";
+
     private final DatabaseClient client;
 
     /**
@@ -32,9 +35,20 @@ public class ConversationRepository {
      */
     public Flux<Conversation> listByUser(String userId) {
         return client.sql(
-                        "SELECT id, user_id, title, datasource_id, model_config_id, created_at, updated_at "
-                                + "FROM conversation WHERE user_id = :userId ORDER BY updated_at DESC")
+                        "SELECT " + COLUMNS + " FROM conversation WHERE user_id = :userId ORDER BY updated_at DESC")
                 .bind("userId", userId)
+                .map((row, meta) -> map(row))
+                .all();
+    }
+
+    /**
+     * Lists every conversation regardless of owner, most recently updated first. Used by the
+     * cross-user view available to admins.
+     *
+     * @return all conversations
+     */
+    public Flux<Conversation> listAll() {
+        return client.sql("SELECT " + COLUMNS + " FROM conversation ORDER BY updated_at DESC")
                 .map((row, meta) -> map(row))
                 .all();
     }
@@ -46,9 +60,7 @@ public class ConversationRepository {
      * @return the conversation, if present
      */
     public Mono<Conversation> findById(String id) {
-        return client.sql(
-                        "SELECT id, user_id, title, datasource_id, model_config_id, created_at, updated_at "
-                                + "FROM conversation WHERE id = :id")
+        return client.sql("SELECT " + COLUMNS + " FROM conversation WHERE id = :id")
                 .bind("id", id)
                 .map((row, meta) -> map(row))
                 .one();

@@ -75,7 +75,8 @@ class Text2SqlControllerPersistenceTest {
 
         controller.stream(jwt, "统计计数", "demo", conversation.id()).collectList().block();
 
-        List<ConversationMessage> messages = conversations.messages(conversation.id(), userId).collectList().block();
+        List<ConversationMessage> messages =
+                conversations.messages(conversation.id(), userId, false).collectList().block();
         assertThat(messages).isNotNull();
         ConversationMessage assistant =
                 messages.stream().filter(m -> "assistant".equals(m.role())).findFirst().orElseThrow();

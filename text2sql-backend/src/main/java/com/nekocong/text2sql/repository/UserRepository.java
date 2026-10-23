@@ -13,6 +13,8 @@ import reactor.core.publisher.Mono;
 @Repository
 public class UserRepository {
 
+    private static final String COLUMNS = "id, username, password_hash, display_name, role";
+
     private final DatabaseClient client;
 
     /**
@@ -31,8 +33,7 @@ public class UserRepository {
      * @return the user, if present
      */
     public Mono<AppUser> findByUsername(String username) {
-        return client.sql(
-                        "SELECT id, username, password_hash, display_name FROM app_user WHERE username = :username")
+        return client.sql("SELECT " + COLUMNS + " FROM app_user WHERE username = :username")
                 .bind("username", username)
                 .map((row, meta) -> UserRepository.map(row))
                 .one();
@@ -45,8 +46,7 @@ public class UserRepository {
      * @return the user, if present
      */
     public Mono<AppUser> findById(String id) {
-        return client.sql(
-                        "SELECT id, username, password_hash, display_name FROM app_user WHERE id = :id")
+        return client.sql("SELECT " + COLUMNS + " FROM app_user WHERE id = :id")
                 .bind("id", id)
                 .map((row, meta) -> UserRepository.map(row))
                 .one();
@@ -58,20 +58,22 @@ public class UserRepository {
      * @param username the username
      * @param passwordHash the BCrypt hash
      * @param displayName the display name
+     * @param role the role name ({@code admin} or {@code user})
      * @return the inserted user
      */
-    public Mono<AppUser> insert(String username, String passwordHash, String displayName) {
+    public Mono<AppUser> insert(String username, String passwordHash, String displayName, String role) {
         String id = UUID.randomUUID().toString();
         GenericExecuteSpec spec =
                 client.sql(
-                                "INSERT INTO app_user (id, username, password_hash, display_name, created_at) "
-                                        + "VALUES (:id, :username, :passwordHash, :displayName, :createdAt)")
+                                "INSERT INTO app_user (id, username, password_hash, display_name, role, created_at) "
+                                        + "VALUES (:id, :username, :passwordHash, :displayName, :role, :createdAt)")
                         .bind("id", id)
                         .bind("username", username)
                         .bind("passwordHash", passwordHash)
+                        .bind("role", role)
                         .bind("createdAt", System.currentTimeMillis());
         spec = displayName == null ? spec.bindNull("displayName", String.class) : spec.bind("displayName", displayName);
-        return spec.then().thenReturn(new AppUser(id, username, passwordHash, displayName));
+        return spec.then().thenReturn(new AppUser(id, username, passwordHash, displayName, role));
     }
 
     private static AppUser map(io.r2dbc.spi.Row row) {
@@ -79,6 +81,7 @@ public class UserRepository {
                 row.get("id", String.class),
                 row.get("username", String.class),
                 row.get("password_hash", String.class),
-                row.get("display_name", String.class));
+                row.get("display_name", String.class),
+                row.get("role", String.class));
     }
 }

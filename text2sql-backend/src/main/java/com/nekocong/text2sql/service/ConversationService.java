@@ -12,8 +12,11 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
- * Service layer for conversations and messages (reactive), with ownership checks. Persistence is
+ * Service layer for conversations and messages (reactive), with data-scope checks. Persistence is
  * delegated to the conversation/message repositories.
+ *
+ * <p>Callers pass their role explicitly: an admin may act on every conversation, while a regular
+ * user is restricted to the rows it owns.
  */
 @Service
 public class ConversationService {
@@ -52,16 +55,20 @@ public class ConversationService {
     }
 
     /**
-     * Loads a conversation, enforcing ownership.
+     * Loads a conversation the caller is allowed to act on.
+     *
+     * <p>Admins may access any conversation; everyone else is limited to their own. A conversation
+     * the caller may not access is reported as {@code 404} so its existence is not leaked.
      *
      * @param id the conversation id
      * @param userId the requesting user id
+     * @param isAdmin whether the caller holds the admin role
      * @return the conversation
      */
-    public Mono<Conversation> requireOwned(String id, String userId) {
+    public Mono<Conversation> requireAccessible(String id, String userId, boolean isAdmin) {
         return conversations
                 .findById(id)
-                .filter(conversation -> conversation.userId().equals(userId))
+                .filter(conversation -> isAdmin || conversation.userId().equals(userId))
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在")));
     }
 
@@ -120,47 +127,53 @@ public class ConversationService {
     }
 
     /**
-     * Renames a conversation, enforcing ownership.
+     * Renames a conversation the caller may access.
      *
      * @param id the conversation id
      * @param userId the requesting user id
+     * @param isAdmin whether the caller holds the admin role
      * @param title the new title
      * @return a completion signal
      */
-    public Mono<Void> rename(String id, String userId, String title) {
-        return requireOwned(id, userId).flatMap(conversation -> conversations.rename(id, title));
+    public Mono<Void> rename(String id, String userId, boolean isAdmin, String title) {
+        return requireAccessible(id, userId, isAdmin).flatMap(conversation -> conversations.rename(id, title));
     }
 
     /**
-     * Deletes a conversation and its messages, enforcing ownership.
+     * Deletes a conversation and its messages, provided the caller may access it.
      *
      * @param id the conversation id
      * @param userId the requesting user id
+     * @param isAdmin whether the caller holds the admin role
      * @return a completion signal
      */
-    public Mono<Void> delete(String id, String userId) {
-        return requireOwned(id, userId)
+    public Mono<Void> delete(String id, String userId, boolean isAdmin) {
+        return requireAccessible(id, userId, isAdmin)
                 .flatMap(conversation -> messages.deleteByConversation(id).then(conversations.delete(id)));
     }
 
     /**
-     * Lists a user's conversations.
+     * Lists the conversations the caller may see: every conversation for an admin, only the
+     * caller's own otherwise.
      *
      * @param userId the user id
+     * @param isAdmin whether the caller holds the admin role
      * @return the conversations
      */
-    public Flux<Conversation> list(String userId) {
-        return conversations.listByUser(userId);
+    public Flux<Conversation> list(String userId, boolean isAdmin) {
+        return isAdmin ? conversations.listAll() : conversations.listByUser(userId);
     }
 
     /**
-     * Lists a conversation's messages, enforcing ownership.
+     * Lists a conversation's messages, provided the caller may access it.
      *
      * @param id the conversation id
      * @param userId the requesting user id
+     * @param isAdmin whether the caller holds the admin role
      * @return the messages
      */
-    public Flux<ConversationMessage> messages(String id, String userId) {
-        return requireOwned(id, userId).flatMapMany(conversation -> messages.listByConversation(id));
+    public Flux<ConversationMessage> messages(String id, String userId, boolean isAdmin) {
+        return requireAccessible(id, userId, isAdmin)
+                .flatMapMany(conversation -> messages.listByConversation(id));
     }
 }
