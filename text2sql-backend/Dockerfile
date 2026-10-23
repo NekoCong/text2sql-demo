@@ -4,9 +4,15 @@
 # Run   (JRE 25, Alpine):  a small runtime image, running as a non-root user.
 #
 # Build context is this directory (text2sql-backend/), see deploy/docker-compose.prod.yml.
+#
+# The base images are build args so a deployment can point them at a registry mirror without
+# editing this file: region-locked networks (e.g. mainland China) cannot reach Docker Hub, and
+# deploy/.env supplies Huawei Cloud SWR equivalents. The defaults are plain Docker Hub references.
+
+ARG MAVEN_IMAGE=maven:3.9.16-eclipse-temurin-25-noble
 
 # --- Build stage --------------------------------------------------------------------------------
-FROM maven:3.9-eclipse-temurin-25 AS build
+FROM ${MAVEN_IMAGE} AS build
 WORKDIR /workspace
 COPY pom.xml ./
 COPY src ./src
@@ -15,7 +21,8 @@ COPY src ./src
 RUN mvn -B -DskipTests package
 
 # --- Runtime stage ------------------------------------------------------------------------------
-FROM eclipse-temurin:25-jre-alpine
+ARG JRE_IMAGE=eclipse-temurin:25-jre-alpine
+FROM ${JRE_IMAGE}
 
 RUN addgroup -S app && adduser -S -G app app
 

@@ -35,6 +35,42 @@
 
 ---
 
+## 1.1 镜像源（重要 —— 大陆网络必读）
+
+本部署面向**中国大陆网络**。实测该环境下 Docker Hub 完全不可用：
+
+| 目标 | 结果 |
+| --- | --- |
+| `registry-1.docker.io:443` | ❌ 不可达 |
+| `auth.docker.io:443` | ❌ 不可达 |
+| `https://get.docker.com` | ❌ 拉取失败 |
+| `github.com` / `mirrors.aliyun.com` / `mirrors.cloud.aliyuncs.com` | ✅ 可用 |
+
+因此：
+
+- **装 Docker 不走 `get.docker.com`**，改用发行版自带包：`docker.io` + `docker-compose-v2`（Ubuntu 26.04 上实测为 Docker 29.1.3 / compose 2.40.3，BuildKit 齐全）
+- **拉镜像全部走华为云 SWR 镜像站**（映射查询：<https://docker.aityp.com/>），具体地址由 `deploy/.env` 的变量注入，Dockerfile 里用 `ARG` 接住，不写死
+
+实测可用地址（均已验证返回 HTTP 200）：
+
+| 用途 | `.env` 变量 | 地址 |
+| --- | --- | --- |
+| 应用数据库 | `MYSQL_IMAGE` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/mysql:8.4` |
+| 可观测平台 | `OTEL_IMAGE` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/grafana/otel-lgtm:0.22.0` |
+| Maven 构建 | `MAVEN_IMAGE` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/maven:3.9.16-eclipse-temurin-25-noble` |
+| JRE 运行 | `JRE_IMAGE` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/eclipse-temurin:25-jre-alpine` |
+| Node 构建 | `NODE_IMAGE` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/node:22-alpine` |
+| Nginx 运行 | `NGINX_IMAGE` | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/nginx:alpine` |
+
+⚠️ 两个**实测得出**的坑，不要凭"规律"去猜：
+
+1. **`maven` 不能加 `library/` 前缀** —— `.../docker.io/library/maven:...` 返回 404，`.../docker.io/maven:...` 才是 200；而 `eclipse-temurin` 恰好相反，**必须**带 `library/`
+2. **`grafana/otel-lgtm` 只有 `0.22.0`，没有 `latest`** —— 所以 compose 里钉的是 `0.22.0`
+
+> 换到能直连 Docker Hub 的网络时，把 `deploy/.env` 里这 6 个变量删掉即可 —— compose 的默认值就是标准 Docker Hub 引用。
+
+---
+
 ## 2. 前置条件
 
 ### 2.1 实例规格
@@ -95,7 +131,7 @@ sudo bash deploy/bootstrap.sh
 `bootstrap.sh` 做的事，按顺序：
 
 1. 装基础包（`ca-certificates` / `curl` / `git`）
-2. 装 Docker Engine + compose plugin（官方脚本）
+2. 装 Docker Engine + compose plugin（**系统源**：`docker.io` + `docker-compose-v2`；不用 `get.docker.com`，见 §1.1）
 3. 写 `/etc/docker/daemon.json`：日志轮转 10MB×3；**故意不配 `hosts`，守护进程不监听 TCP**
 4. `ufw` 只放行 22 / 80
 5. 校验 `deploy/.env`：缺 `MYSQL_ROOT_PASSWORD` 或 `TEXT2SQL_JWT_SECRET`、或 JWT 密钥短于 32 字符 → **直接退出**，绝不写默认值
@@ -177,6 +213,9 @@ sudo bash deploy/bootstrap.sh
 | 提问时 SSE 中途断流 | nginx 缓冲/超时 | `nginx.conf` 里已设 `proxy_buffering off; proxy_read_timeout 3600s;`，确认容器用的是仓库里的这份配置 |
 | 种子数据没进库 | MySQL 卷已存在，init 脚本不会再跑 | `docker compose -f deploy/docker-compose.prod.yml down -v` 再 up（**会删库**） |
 | 改了 `app-schema.sql` 但表结构没变 | 同上：init 脚本只在空库时执行 | 手工 `ALTER TABLE`，或 `down -v` 重建 |
+| `docker pull` 卡住 / `TIMEOUT` / `no such host` | Docker Hub 在大陆被封（见 §1.1） | 确认 `deploy/.env` 里 6 个 `*_IMAGE` 变量都指向华为云 SWR 且不为空 |
+| 构建报 `docker.io/library/maven:... : not found` | 给 maven 加了 `library/` 前缀 | maven 用 `.../docker.io/maven:...`（不带 library），见 §1.1 |
+| `docker compose` 不存在 | 只装了 `docker.io` 没装插件 | `apt-get install -y docker-compose-v2` |
 
 ---
 
@@ -200,7 +239,7 @@ Docker 构建不受影响（镜像里自带 JDK 25）。
 | --- | --- |
 | `deploy/bootstrap.sh` | 幂等的服务器初始化脚本 |
 | `deploy/docker-compose.prod.yml` | 全栈编排（MySQL + otel + backend + frontend） |
-| `deploy/.env.example` | 密钥模板；`deploy/.env` 已 git-ignore |
+| `deploy/.env.example` | 密钥 + 镜像地址模板；`deploy/.env` 已 git-ignore |
 | `text2sql-backend/Dockerfile` | 多阶段：`maven:3.9-eclipse-temurin-25` 构建 → `eclipse-temurin:25-jre-alpine` 运行（非 root） |
 | `text2sql-frontend/Dockerfile` | `node:22-alpine` 构建 → `nginx:alpine` 托管 |
 | `text2sql-frontend/nginx.conf` | SPA 回退 + `/api` 反代 + SSE 关缓冲 |

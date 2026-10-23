@@ -40,13 +40,27 @@ else
 fi
 
 # --- 2. Docker Engine + the compose plugin ------------------------------------------------------
-if command -v docker >/dev/null 2>&1; then
+# Installed from the distribution's own packages, not from https://get.docker.com: that script is
+# unreachable on some networks (registry/Docker endpoints are blocked in mainland China), and
+# Ubuntu 24.04+ ships Docker 29 with the compose v2 CLI plugin anyway.
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     log "Docker already installed: $(docker --version)"
 else
-    log "Installing Docker Engine"
-    curl -fsSL https://get.docker.com | sh
+    log "Installing Docker from the distribution packages"
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get install -y docker.io || warn "docker.io did not install cleanly from apt."
+        # Ubuntu names the plugin package docker-compose-v2; other distributions differ.
+        apt-get install -y docker-compose-v2 || apt-get install -y docker-compose-plugin || true
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y docker docker-compose-plugin || true
+    elif command -v yum >/dev/null 2>&1; then
+        yum install -y docker docker-compose-plugin || true
+    fi
 fi
-docker compose version >/dev/null 2>&1 || fail "The 'docker compose' plugin is missing."
+
+command -v docker >/dev/null 2>&1 || fail "Docker is not available after the install step."
+docker compose version >/dev/null 2>&1 \
+    || fail "The 'docker compose' plugin is missing (Ubuntu package: docker-compose-v2)."
 
 systemctl enable --now docker >/dev/null 2>&1 || warn "Could not enable the docker service via systemd."
 
