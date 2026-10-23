@@ -10,3 +10,19 @@ spring:
     init:
       mode: always
       schema-locations: classpath:db/app-schema.sql
+
+# The demo *target* datasource stays on in-memory H2 here. application.yaml points it at MySQL, but
+# the suite must run without an external server, and a later `text2sql.datasources.items` list
+# replaces the earlier one wholesale.
+text2sql:
+  datasources:
+    default-id: demo
+    items:
+      - id: demo
+        name: Demo E-commerce (H2)
+        driver: org.h2.Driver
+        url: "jdbc:h2:mem:text2sql;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE"
+        username: sa
+        password: ""
+        dialect: H2
+        seed: true

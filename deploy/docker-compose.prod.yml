@@ -71,6 +71,10 @@ services:
       APP_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in deploy/.env}
       TEXT2SQL_JWT_SECRET: ${TEXT2SQL_JWT_SECRET:?set TEXT2SQL_JWT_SECRET in deploy/.env}
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      # The demo target database: same MySQL server, its own schema, created on first connect.
+      DEMO_DB_JDBC_URL: "jdbc:mysql://mysql:3306/demo?createDatabaseIfNotExist=true&sslMode=PREFERRED&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+      DEMO_DB_USERNAME: root
+      DEMO_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in deploy/.env}
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-lgtm:4318/v1/traces
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-lgtm:4318/v1/metrics
     expose:
