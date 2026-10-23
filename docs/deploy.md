@@ -206,7 +206,9 @@ sudo bash deploy/bootstrap.sh
 关于数据：**MySQL 数据不持久化，会被一起丢掉**。这是有意为之：
 
 - 应用库的所有数据都由 `db/app-schema.sql` + `db/app-data.sql` 在 MySQL 容器**首次初始化**时重建
-- 演示目标库（`demo`）是 H2 内存库，每次启动自动灌 `db/schema.sql` + `db/data.sql`
+- 演示目标库（`demo`）在**同一个 MySQL 实例**里，是独立的 schema，首次连接时由
+  `createDatabaseIfNotExist=true` 自动创建；后端每次启动都会用 `db/schema.sql` + `db/data.sql`
+  重建并重灌它（`text2sql.datasources.items[].seed: true`），所以演示数据永远是已知状态
 - 所以恢复后立刻就是可演示状态，不需要备份恢复流程
 
 如果以后需要保留真实数据，再引入独立云盘挂载 `/var/lib/mysql`，或定期 `mysqldump`。
@@ -275,6 +277,7 @@ Docker 构建不受影响（镜像里自带 JDK 25）。
 | Docker Compose | 2.40.3（`docker-compose-v2`） |
 | 代码 | `git clone`（仓库已改为 public，`git pull` 可用） |
 | 镜像 | 全部来自华为云 SWR（见 §1.1） |
+| 演示数据源 | `demo`（MySQL schema `demo`，与 app 库同实例，自动创建 + 启动时重灌） |
 | MySQL root 密码 | `root`（`deploy/.env`，mode 600） |
 | JWT 密钥 | 随机生成，未记录、无需人工持有 |
 
