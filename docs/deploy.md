@@ -103,38 +103,24 @@ ssh -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 -L 3306:127.0.0.1:3306 <user>@
 
 ### 2.3 代码怎么上服务器
 
-仓库远端：`https://github.com/NekoCong/text2sql-demo.git` —— **这是私有仓库**，而服务器上没有
-GitHub 凭据，所以直接 `git clone` 会失败：
-
-```
-fatal: could not read Username for 'https://github.com': No such device or address
-```
-
-两条路，任选其一：
-
-**A. 配好凭据，走 `git clone`（恢复链路最干净）**
-- 把仓库改成 public，或
-- 给仓库加一个只读 Deploy Key，并把对应私钥放在本机 `C:\secretkey\` 与服务器 `.pem` 一起保管
-
-之后 `git clone` 可用，§5 的恢复流程完全成立。
-
-**B. 直接打包传输（**当前实际采用的方式**，不需要任何凭据）**
-
-在**有代码的本机**执行：
-
-```powershell
-tar -czf "$env:TEMP\repo.tgz" --exclude=.git --exclude=.idea --exclude=node_modules --exclude=target --exclude=dist -C <仓库路径> .
-scp -i <密钥.pem> "$env:TEMP\repo.tgz" root@<服务器IP>:/tmp/repo.tgz
-```
-
-在**服务器**上执行：
+仓库远端：`https://github.com/NekoCong/text2sql-demo.git` —— **public**，匿名克隆即可：
 
 ```bash
-mkdir -p /root/text2sql-demo
-tar -xzf /tmp/repo.tgz -C /root/text2sql-demo
+git clone https://github.com/NekoCong/text2sql-demo.git /root/text2sql-demo
 ```
 
-> 这条路径下服务器上没有 `.git`，`git pull` 不可用；恢复时必须重新打包传输。
+服务器上现在是真正的 git checkout，日常更新就是：
+
+```bash
+cd /root/text2sql-demo && git pull
+```
+
+> **历史说明（否则会误判）**：首次部署时这个仓库是私有的，服务器没有凭据，`git clone` 会报
+> `fatal: could not read Username for 'https://github.com'`，当时是用打包传输绕过的。
+> 之后仓库已改为 public，代码树也换成了真正的 checkout。
+>
+> 如果以后又改回私有，两条备选路：配只读 Deploy Key；或继续打包传输 ——
+> 本机 `tar -czf repo.tgz --exclude=.git ...` → `scp` → 服务器 `tar -xzf`。
 > 重新解包时**不要** `rm -rf` 整个目录，否则会连 `deploy/.env`（密钥）一起删掉。
 
 ---
@@ -142,10 +128,9 @@ tar -xzf /tmp/repo.tgz -C /root/text2sql-demo
 ## 3. 从零部署
 
 ```bash
-# 1) 把代码放到 /root/text2sql-demo（私有仓库，走 §2.3 的打包传输）
+# 1) 拉代码（仓库是 public）
 sudo apt-get update && sudo apt-get install -y git    # RHEL 系用 dnf
-mkdir -p /root/text2sql-demo
-tar -xzf /tmp/repo.tgz -C /root/text2sql-demo
+git clone https://github.com/NekoCong/text2sql-demo.git /root/text2sql-demo
 cd /root/text2sql-demo
 
 # 2) 准备密钥
@@ -212,9 +197,7 @@ curl -s -X POST http://127.0.0.1/api/auth/login \
 
 ```bash
 # 新机器上（IP 可能已经变了）
-# 代码按 §2.3-B 打包传入（私有仓库），或按 §2.3-A 配好凭据后 git clone
-mkdir -p /root/text2sql-demo
-tar -xzf /tmp/repo.tgz -C /root/text2sql-demo
+git clone https://github.com/NekoCong/text2sql-demo.git /root/text2sql-demo
 cd /root/text2sql-demo
 cp deploy/.env.example deploy/.env   # 重新填密钥
 sudo bash deploy/bootstrap.sh
@@ -290,7 +273,7 @@ Docker 构建不受影响（镜像里自带 JDK 25）。
 | 主机 | 阿里云 ECS，Ubuntu 26.04.1 LTS，8 vCPU / 30 GB / 49 GB |
 | Docker | 29.1.3（Ubuntu 系统包 `docker.io`） |
 | Docker Compose | 2.40.3（`docker-compose-v2`） |
-| 代码 | tarball 传输，无 `.git`（见 §2.3-B） |
+| 代码 | `git clone`（仓库已改为 public，`git pull` 可用） |
 | 镜像 | 全部来自华为云 SWR（见 §1.1） |
 | MySQL root 密码 | `root`（`deploy/.env`，mode 600） |
 | JWT 密钥 | 随机生成，未记录、无需人工持有 |
