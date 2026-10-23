@@ -10,6 +10,7 @@
 # deploy/.env supplies Huawei Cloud SWR equivalents. The defaults are plain Docker Hub references.
 
 ARG MAVEN_IMAGE=maven:3.9.16-eclipse-temurin-25-noble
+ARG JRE_IMAGE=eclipse-temurin:25-jre-alpine
 
 # --- Build stage --------------------------------------------------------------------------------
 FROM ${MAVEN_IMAGE} AS build
@@ -21,7 +22,6 @@ COPY src ./src
 RUN mvn -B -DskipTests package
 
 # --- Runtime stage ------------------------------------------------------------------------------
-ARG JRE_IMAGE=eclipse-temurin:25-jre-alpine
 FROM ${JRE_IMAGE}
 
 RUN addgroup -S app && adduser -S -G app app

@@ -8,6 +8,7 @@
 # editing this file (see deploy/.env).
 
 ARG NODE_IMAGE=node:22-alpine
+ARG NGINX_IMAGE=nginx:alpine
 
 # --- Build stage --------------------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS build
@@ -18,7 +19,6 @@ COPY . .
 RUN npm run build
 
 # --- Runtime stage ------------------------------------------------------------------------------
-ARG NGINX_IMAGE=nginx:alpine
 FROM ${NGINX_IMAGE}
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
