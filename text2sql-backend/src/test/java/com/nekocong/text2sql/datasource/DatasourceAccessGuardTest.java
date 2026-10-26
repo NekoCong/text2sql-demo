@@ -45,7 +45,18 @@ class DatasourceAccessGuardTest {
     void adminMayUseAnyConfiguredDatasource() {
         assertThat(guard.resolve(DataScope.admin("u-admin"), null)).isEqualTo("campus");
         assertThatThrownBy(() -> guard.resolve(DataScope.admin("u-admin"), "does-not-exist"))
-                .isInstanceOf(NoSuchElementException.class);
+                .isInstanceOf(SqlPermissionException.class)
+                .hasMessageContaining("不存在");
+    }
+
+    @Test
+    void omittedDefaultMustBeGranted() {
+        DataScope otherOnly =
+                new DataScope("u-1", "student", Set.of(1L), 1L, "2023001", Set.of("warehouse"));
+
+        assertThatThrownBy(() -> guard.resolve(otherOnly, null))
+                .isInstanceOf(SqlPermissionException.class)
+                .hasMessageContaining("均不可用");
     }
 
     private static DataScope scope(String role, Set<String> allowed) {

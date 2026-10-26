@@ -75,6 +75,15 @@ public class SecurityConfig {
                                         .permitAll()
                                         .pathMatchers("/api/admin/**")
                                         .hasRole("ADMIN")
+                                        .pathMatchers(
+                                                HttpMethod.POST,
+                                                "/api/text2sql/datasources",
+                                                "/api/text2sql/datasources/**")
+                                        .hasRole("ADMIN")
+                                        .pathMatchers(HttpMethod.PUT, "/api/text2sql/datasources/**")
+                                        .hasRole("ADMIN")
+                                        .pathMatchers(HttpMethod.DELETE, "/api/text2sql/datasources/**")
+                                        .hasRole("ADMIN")
                                         .anyExchange()
                                         .authenticated())
                 .oauth2ResourceServer(
@@ -88,9 +97,8 @@ public class SecurityConfig {
      * Maps the JWT {@code role} claim to a single granted authority.
      *
      * <p>An unknown or missing role maps to {@code ROLE_NONE}: the caller stays authenticated but
-     * carries no role authority. Enforcement that turns that into a rejection lives in the
-     * data-permission layer (which validates the resolved scope on every query); no endpoint is
-     * role-guarded by URL pattern here.
+     * carries no role authority. The data-permission layer validates the resolved scope on every
+     * query, and {@code /api/admin/**} plus datasource mutation endpoints require {@code ROLE_ADMIN}.
      *
      * @return the converter
      */

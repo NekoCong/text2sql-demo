@@ -58,8 +58,19 @@ public class DataScopeResolver {
             String type = row.scopeType() == null ? "" : row.scopeType();
             switch (type) {
                 case "class_id" -> classIds.add(parseLong(row.scopeValue(), "class_id"));
-                case "student_id" -> studentId = parseLong(row.scopeValue(), "student_id");
-                case "student_no" -> studentNo = row.scopeValue();
+                case "student_id" -> {
+                    Long parsed = parseLong(row.scopeValue(), "student_id");
+                    if (studentId != null && !studentId.equals(parsed)) {
+                        throw denied("数据范围配置冲突：存在多个 student_id");
+                    }
+                    studentId = parsed;
+                }
+                case "student_no" -> {
+                    if (studentNo != null && !studentNo.equals(row.scopeValue())) {
+                        throw denied("数据范围配置冲突：存在多个 student_no");
+                    }
+                    studentNo = row.scopeValue();
+                }
                 default -> {
                     // Unknown attribute kinds are ignored: they grant nothing.
                 }

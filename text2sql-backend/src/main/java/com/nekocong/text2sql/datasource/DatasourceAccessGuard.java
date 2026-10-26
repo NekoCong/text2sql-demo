@@ -2,6 +2,7 @@ package com.nekocong.text2sql.datasource;
 
 import com.nekocong.text2sql.security.DataScope;
 import com.nekocong.text2sql.security.SqlPermissionException;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
@@ -38,7 +39,11 @@ public class DatasourceAccessGuard {
     public String resolve(DataScope scope, String requestedId) {
         if (scope.isAdmin()) {
             String id = (requestedId == null || requestedId.isBlank()) ? registry.defaultId() : requestedId;
-            registry.definition(id); // fail fast on an unknown id
+            try {
+                registry.definition(id); // fail fast on an unknown id
+            } catch (NoSuchElementException ex) {
+                throw new SqlPermissionException("数据源 " + id + " 不存在");
+            }
             return id;
         }
 
@@ -70,6 +75,6 @@ public class DatasourceAccessGuard {
         if (defaultId != null && known.contains(defaultId)) {
             return defaultId;
         }
-        return known.stream().sorted().findFirst().orElseThrow();
+        throw new SqlPermissionException("默认数据源未授权，请显式指定可用的数据源");
     }
 }

@@ -1,5 +1,7 @@
 package com.nekocong.text2sql.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -80,6 +82,32 @@ class Text2SqlControllerTest {
                 .isEqualTo("H2")
                 .jsonPath("$[0].default")
                 .isEqualTo(true);
+    }
+
+    @Test
+    void datasourceManagementIsAdminOnly() {
+        client.post()
+                .uri("/api/text2sql/datasources")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue("{\"id\":\"evil\",\"url\":\"jdbc:h2:mem:evil\"}")
+                .exchange()
+                .expectStatus()
+                .isForbidden();
+    }
+
+    @Test
+    void streamReportsTheScopeRejectionAsAnErrorEvent() {
+        String unscoped = TestAuth.registerAndLogin(client);
+
+        client.get()
+                .uri("/api/text2sql/stream?message=hello")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + unscoped)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .value(body -> assertThat(body).contains("error").contains("未配置数据范围"));
     }
 
     @Test

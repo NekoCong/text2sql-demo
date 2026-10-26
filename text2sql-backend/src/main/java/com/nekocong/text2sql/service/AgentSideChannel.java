@@ -22,6 +22,16 @@ final class AgentSideChannel {
     private static final Logger log = LoggerFactory.getLogger(AgentSideChannel.class);
 
     private final Sinks.Many<AgentEvent> sink = Sinks.many().unicast().onBackpressureBuffer();
+    private final boolean scopeApplied;
+
+    /**
+     * Creates the channel.
+     *
+     * @param scopeApplied whether the reported SQL was filtered for the caller's scope
+     */
+    AgentSideChannel(boolean scopeApplied) {
+        this.scopeApplied = scopeApplied;
+    }
 
     /**
      * The listener tools can call; it is placed in the AgentScope runtime context.
@@ -39,7 +49,7 @@ final class AgentSideChannel {
                                         "datasourceId", datasourceId == null ? "" : datasourceId,
                                         "sql", sql,
                                         "rowCount", rowCount,
-                                        "scopeApplied", true)));
+                                        "scopeApplied", scopeApplied)));
             }
 
             @Override

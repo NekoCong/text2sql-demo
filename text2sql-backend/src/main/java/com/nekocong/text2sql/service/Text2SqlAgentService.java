@@ -57,7 +57,7 @@ public class Text2SqlAgentService {
                         model ->
                                 Flux.defer(
                                         () -> {
-                                            AgentSideChannel side = new AgentSideChannel();
+                                            AgentSideChannel side = new AgentSideChannel(!scope.isAdmin());
                                             RuntimeContext ctx =
                                                     RuntimeContext.builder()
                                                             .sessionId(sessionId)

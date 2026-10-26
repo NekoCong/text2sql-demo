@@ -77,12 +77,13 @@ class AgentEventPresenterTest {
     }
 
     @Test
-    void failureEventsBecomeErrors() {
+    void failureEventsBecomeErrors() throws Exception {
         ServerSentEvent<String> event =
                 present(new CustomEvent("error", Map.of("message", "表 salary 不在当前数据范围内")));
 
         assertThat(event.event()).isEqualTo("error");
-        assertThat(event.data()).contains("salary");
+        assertThat(new ObjectMapper().readTree(event.data()).get("message").asText())
+                .contains("salary");
     }
 
     @Test

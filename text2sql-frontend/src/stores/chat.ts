@@ -157,12 +157,15 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   /**
-   * Replaces the visible messages, e.g. with a loaded conversation history.
+   * Replaces the visible messages, e.g. with a loaded conversation history. Loading a
+   * persisted conversation always returns to the deterministic pipeline, since the agent
+   * path is not persisted.
    *
    * @param next the messages to display
    */
   function replaceMessages(next: ChatMessage[]): void {
     messages.value = next
+    agentMode.value = false
   }
 
   /** Clears the conversation and starts over. */

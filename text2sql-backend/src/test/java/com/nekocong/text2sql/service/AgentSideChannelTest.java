@@ -24,7 +24,7 @@ class AgentSideChannelTest {
 
     @Test
     void successEmitsTheEnforcedSqlAlongsideToolSteps() {
-        AgentSideChannel side = new AgentSideChannel();
+        AgentSideChannel side = new AgentSideChannel(true);
         ExecutionListener listener = side.listener();
 
         Flux<AgentEvent> agent =
@@ -52,7 +52,7 @@ class AgentSideChannelTest {
 
     @Test
     void failureEmitsAnErrorEventAndStillTerminates() {
-        AgentSideChannel side = new AgentSideChannel();
+        AgentSideChannel side = new AgentSideChannel(true);
         ExecutionListener listener = side.listener();
 
         Flux<AgentEvent> agent =
@@ -75,8 +75,27 @@ class AgentSideChannelTest {
     }
 
     @Test
+    void adminSideChannelMarksTheSqlAsUnfiltered() {
+        AgentSideChannel side = new AgentSideChannel(false);
+        ExecutionListener listener = side.listener();
+
+        Flux<AgentEvent> agent =
+                Flux.defer(
+                        () -> {
+                            listener.onSuccess("campus", "SELECT 1", 1);
+                            return Flux.empty();
+                        });
+
+        List<AgentEvent> events = side.merge(agent).collectList().block(Duration.ofSeconds(5));
+
+        assertThat(events).isNotNull();
+        assertThat(custom(events, "sql").orElseThrow().getValue())
+                .containsEntry("scopeApplied", false);
+    }
+
+    @Test
     void noQueryProducesNoSqlEvent() {
-        AgentSideChannel side = new AgentSideChannel();
+        AgentSideChannel side = new AgentSideChannel(true);
 
         Flux<AgentEvent> agent = Flux.just(new TextBlockDeltaEvent("r1", "b1", "你好"));
 

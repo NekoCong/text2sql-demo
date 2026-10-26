@@ -122,7 +122,25 @@ class DataScopeRewriterTest {
     }
 
     @Test
-    void rejectsWhitelistedTablesInsideExistsSubqueries() {
+    void rewritesParenthesizedSelectOrderBy() {
+        String sql =
+                rewriter.rewrite(
+                        "SELECT (SELECT student_no FROM student ORDER BY (SELECT MAX(score) FROM score)) FROM student",
+                        student());
+
+        assertThat(compact(sql)).contains("student_id in (1)");
+    }
+
+    @Test
+    void rejectsValuesQueries() {
+        assertThatThrownBy(
+                        () -> rewriter.rewrite("WITH v AS (VALUES (1)) SELECT * FROM v", student()))
+                .isInstanceOf(SqlPermissionException.class)
+                .hasMessageContaining("VALUES");
+    }
+
+    @Test
+    void rejectsNonWhitelistedTablesInsideExistsSubqueries() {
         assertThatThrownBy(
                         () ->
                                 rewriter.rewrite(
@@ -144,7 +162,7 @@ class DataScopeRewriterTest {
     }
 
     @Test
-    void rejectsWhitelistedTablesInsideSetOperationOrderBy() {
+    void rejectsNonWhitelistedTablesInsideSetOperationOrderBy() {
         assertThatThrownBy(
                         () ->
                                 rewriter.rewrite(
@@ -176,7 +194,7 @@ class DataScopeRewriterTest {
     void givesRepeatedTableReferencesDistinctAliases() {
         String sql = rewriter.rewrite("SELECT 1 FROM student, student", student());
 
-        assertThat(sql).containsIgnoringCase("AS student_sp2");
+        assertThat(sql).containsIgnoringCase("AS student_sp1");
     }
 
     private static String compact(String sql) {

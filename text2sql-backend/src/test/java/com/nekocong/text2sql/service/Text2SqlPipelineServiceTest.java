@@ -113,6 +113,7 @@ class Text2SqlPipelineServiceTest {
 
         assertThat(result.datasourceId()).isEqualTo("campus");
         assertThat(result.sql()).containsIgnoringCase("student_no IN ('2023001')");
+        assertThat(result.explanation()).contains("数据范围");
         assertThat(result.result().rowCount()).isEqualTo(1);
         assertThat(result.result().columns()).anyMatch(c -> c.name().equalsIgnoreCase("student_count"));
     }
@@ -225,6 +226,36 @@ class Text2SqlPipelineServiceTest {
                                         .block())
                 .isInstanceOf(com.nekocong.text2sql.security.SqlPermissionException.class);
         assertThat(failure.get()).contains("salary");
+    }
+
+    @Test
+    void listenerIsNotifiedWhenTheDatasourceIsNotGranted() {
+        Text2SqlPipelineService pipeline = pipelineReturning("SELECT 1", "one");
+        DataScope noDatasource =
+                new DataScope("u-student", "student", Set.of(1L), 1L, "2023001", Set.of());
+        java.util.concurrent.atomic.AtomicReference<String> failure =
+                new java.util.concurrent.atomic.AtomicReference<>();
+
+        assertThatThrownBy(
+                        () ->
+                                pipeline.run(
+                                                noDatasource,
+                                                null,
+                                                "q",
+                                                new ExecutionListener() {
+                                                    @Override
+                                                    public void onSuccess(String ds, String sql, int rowCount) {
+                                                        // not expected
+                                                    }
+
+                                                    @Override
+                                                    public void onFailure(String ds, String message) {
+                                                        failure.set(message);
+                                                    }
+                                                })
+                                        .block())
+                .isInstanceOf(com.nekocong.text2sql.security.SqlPermissionException.class);
+        assertThat(failure.get()).contains("没有任何可用的数据源");
     }
 
     private static int indexOf(List<Text2SqlEvent> events, Class<? extends Text2SqlEvent> type) {

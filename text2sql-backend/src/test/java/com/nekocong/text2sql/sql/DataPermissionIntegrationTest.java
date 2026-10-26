@@ -104,6 +104,17 @@ class DataPermissionIntegrationTest {
                 .isInstanceOf(SqlPermissionException.class);
     }
 
+    @Test
+    void seededFactsAgreeWithTheirStudentsClass() {
+        QueryResult mismatched =
+                run(
+                        "SELECT COUNT(*) AS n FROM score sc JOIN student s ON s.id = sc.student_id "
+                                + "WHERE sc.class_id <> s.class_id",
+                        DataScope.admin("u-admin"));
+
+        assertThat(((Number) mismatched.rows().get(0).get("n")).intValue()).isZero();
+    }
+
     private static DataScope studentScope() {
         return new DataScope("u-student", "student", Set.of(1L), 1L, "2023001", Set.of("campus"));
     }

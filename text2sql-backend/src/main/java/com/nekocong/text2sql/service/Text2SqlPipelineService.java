@@ -101,12 +101,15 @@ public class Text2SqlPipelineService {
      */
     public Mono<Text2SqlResult> run(
             DataScope scope, String datasourceId, String question, ExecutionListener listener) {
-        String id = resolveId(scope, datasourceId);
-        String dialect = dialectOf(id);
-        return Mono.zip(schema(id, scope, question), modelResolver.resolve(scope.userId()))
-                .flatMap(pair -> generationService.generate(pair.getT2(), dialect, pair.getT1(), question))
-                .flatMap(generation -> execute(id, dialect, generation, scope, listener))
-                .doOnError(error -> listener.onFailure(id, errorMessage(error)));
+        return Mono.defer(
+                () -> {
+                    String id = resolveId(scope, datasourceId);
+                    String dialect = dialectOf(id);
+                    return Mono.zip(schema(id, scope, question), modelResolver.resolve(scope.userId()))
+                            .flatMap(pair -> generationService.generate(pair.getT2(), dialect, pair.getT1(), question))
+                            .flatMap(generation -> execute(id, dialect, generation, scope, listener));
+                })
+                .doOnError(error -> listener.onFailure(null, errorMessage(error)));
     }
 
     /**
@@ -159,19 +162,23 @@ public class Text2SqlPipelineService {
      */
     public Flux<Text2SqlEvent> stream(
             DataScope scope, String datasourceId, String question, ExecutionListener listener) {
-        String id = resolveId(scope, datasourceId);
-        String dialect = dialectOf(id);
-        return Flux.concat(
-                Flux.just(new StepEvent("introspect", "读取数据源表结构")),
-                Mono.zip(schema(id, scope, question), modelResolver.resolve(scope.userId()))
-                        .flatMapMany(
-                                pair ->
-                                        Flux.concat(
-                                                Flux.just(new StepEvent("generate", "调用模型生成 SQL")),
-                                                generationService
-                                                        .generate(pair.getT2(), dialect, pair.getT1(), question)
-                                                        .flatMapMany(gen -> toEvents(id, dialect, gen, scope, listener)))))
-                .doOnError(error -> listener.onFailure(id, errorMessage(error)));
+        return Flux.defer(
+                () -> {
+                    String id = resolveId(scope, datasourceId);
+                    String dialect = dialectOf(id);
+                    return Flux.concat(
+                                    Flux.just(new StepEvent("introspect", "读取数据源表结构")),
+                                    Mono.zip(schema(id, scope, question), modelResolver.resolve(scope.userId()))
+                                            .flatMapMany(
+                                                    pair ->
+                                                            Flux.concat(
+                                                                    Flux.just(new StepEvent("generate", "调用模型生成 SQL")),
+                                                                    generationService
+                                                                            .generate(pair.getT2(), dialect, pair.getT1(), question)
+                                                                            .flatMapMany(
+                                                                                    gen -> toEvents(id, dialect, gen, scope, listener)))));
+                })
+                .doOnError(error -> listener.onFailure(null, errorMessage(error)));
     }
 
     private Flux<Text2SqlEvent> toEvents(
@@ -182,7 +189,7 @@ public class Text2SqlPipelineService {
             ExecutionListener listener) {
         String safeSql = enforce(generation.sql(), scope);
         return Flux.concat(
-                Flux.just(new SqlEvent(id, dialect, safeSql, generation.explanation())),
+                Flux.just(new SqlEvent(id, dialect, safeSql, scopedExplanation(generation.explanation(), scope))),
                 Flux.just(new StepEvent("execute", "执行只读查询")),
                 sqlExecutor
                         .execute(id, safeSql)
@@ -206,7 +213,12 @@ public class Text2SqlPipelineService {
                 .map(
                         result ->
                                 new Text2SqlResult(
-                                        id, dialect, safeSql, generation.explanation(), result, chartInference.infer(result)));
+                                        id,
+                                        dialect,
+                                        safeSql,
+                                        scopedExplanation(generation.explanation(), scope),
+                                        result,
+                                        chartInference.infer(result)));
     }
 
     private static String errorMessage(Throwable error) {
@@ -220,7 +232,22 @@ public class Text2SqlPipelineService {
      */
     private String enforce(String sql, DataScope scope) {
         String safeSql = safetyValidator.validateAndNormalize(sql);
-        return rewriter.rewrite(safeSql, scope);
+        String rewritten = rewriter.rewrite(safeSql, scope);
+        // Defense in depth: the serialized rewrite must still be a single read-only statement.
+        return safetyValidator.validateAndNormalize(rewritten);
+    }
+
+    /**
+     * Appends a data-scope note so the answer states the restriction instead of silently returning a
+     * narrower result (see the "越界问题的回答语义" requirement).
+     */
+    private static String scopedExplanation(String explanation, DataScope scope) {
+        if (scope.isAdmin()) {
+            return explanation;
+        }
+        String scopeText = scope.isStudent() ? "仅本人" : "所管班级";
+        String note = "结果已按当前账号的数据范围（" + scopeText + "）过滤";
+        return (explanation == null || explanation.isBlank()) ? note : explanation + "（" + note + "）";
     }
 
     private Mono<String> schema(String id, DataScope scope, String question) {

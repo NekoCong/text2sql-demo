@@ -111,7 +111,10 @@ public class DataScopeRewriter {
         } else if (select instanceof ParenthesedSelect parenthesed) {
             rewriteSelect(parenthesed.getSelect(), scope, ctes);
             rewriteOrderBy(parenthesed.getOrderByElements(), scope, ctes);
-        } else if (!(select instanceof Values)) {
+        } else if (select instanceof Values) {
+            // A VALUES list can carry scalar subqueries; rejecting it keeps enforcement total.
+            throw new SqlPermissionException("不支持 VALUES 查询，无法应用数据权限");
+        } else {
             throw new SqlPermissionException("不支持该查询结构，无法应用数据权限");
         }
     }
@@ -165,7 +168,8 @@ public class DataScopeRewriter {
             return rewriteTable(table, scope, ctes, aliases);
         }
         if (item instanceof ParenthesedSelect parenthesed) {
-            rewriteSelect(parenthesed.getSelect(), scope, ctes);
+            // Pass the parenthesized select itself: its own ORDER BY / WITH list must be visited too.
+            rewriteSelect(parenthesed, scope, ctes);
             return item;
         }
         if (item instanceof ParenthesedFromItem parenthesed) {
@@ -225,7 +229,7 @@ public class DataScopeRewriter {
 
     private static String uniqueAlias(String requested, Set<String> aliases) {
         String candidate = requested;
-        int suffix = 1;
+        int suffix = 0;
         while (aliases.contains(candidate.toLowerCase(Locale.ROOT))) {
             suffix++;
             candidate = requested + "_sp" + suffix;
@@ -248,12 +252,9 @@ public class DataScopeRewriter {
                     @Override
                     public void visit(Select subSelect) {
                         // ParenthesedSelect.accept(ExpressionVisitor) dispatches to visit(Select);
-                        // it does not call the visit(ParenthesedSelect) overload.
-                        if (subSelect instanceof ParenthesedSelect parenthesed) {
-                            rewriteSelect(parenthesed.getSelect(), scope, ctes);
-                        } else {
-                            rewriteSelect(subSelect, scope, ctes);
-                        }
+                        // it does not call the visit(ParenthesedSelect) overload. Pass it through so
+                        // its inner select AND its own ORDER BY / WITH list are rewritten.
+                        rewriteSelect(subSelect, scope, ctes);
                     }
                 });
     }

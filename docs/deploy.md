@@ -299,8 +299,10 @@ ufw           active，仅放行 22/tcp、80/tcp
 数据范围      student01 -> student02 的会话 -> 404（拒绝）
               admin -> student02 的会话 -> 200（放行）
 行级权限      student01 查询 -> SQL 自动带 student_no/student_id 过滤
-数据源权限    撤销 student 的 campus 授权 -> 下一次查询被拒绝
+数据源权限    撤销 student 的 campus 授权 -> 下一次查询被拒绝（新增能力，待部署环境复跑确认）
 ```
+
+> 「行级权限」「数据源权限」两行属于本分支新增能力，当前仅在本地测试环境验证；部署后请按 §4 的浏览器步骤复跑确认。
 
 > 已知小问题：`bootstrap.sh` 结尾用 `api.ipify.org` 探测公网 IP，但该域名在本网络不可达，
 > 所以最后打印的是 `http://<server-ip>/` 占位符。不影响部署，实际地址见上表。
