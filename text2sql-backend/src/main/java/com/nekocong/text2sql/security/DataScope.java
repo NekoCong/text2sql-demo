@@ -11,7 +11,7 @@ import java.util.Set;
  *
  * @param userId the authenticated user id
  * @param role the canonical role ({@code admin}, {@code student} or {@code counselor})
- * @param classIds the classes a counselor manages; empty for students and admins
+ * @param classIds the classes in scope: the classes a counselor manages, or the student's own class
  * @param studentId the caller's own business-database student id (students only)
  * @param studentNo the caller's own student number (students only)
  * @param allowedDatasources datasource ids the role may query; ignored for admins, who see all
@@ -23,6 +23,12 @@ public record DataScope(
         Long studentId,
         String studentNo,
         Set<String> allowedDatasources) {
+
+    /** Normalizes the collections so the scope is structurally immutable. */
+    public DataScope {
+        classIds = classIds == null ? Set.of() : Set.copyOf(classIds);
+        allowedDatasources = allowedDatasources == null ? Set.of() : Set.copyOf(allowedDatasources);
+    }
 
     /**
      * Creates an unrestricted scope for an administrator.

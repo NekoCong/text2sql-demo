@@ -2,12 +2,16 @@ package com.nekocong.text2sql.web;
 
 import java.util.Map;
 import java.util.UUID;
+import com.nekocong.text2sql.repository.UserRepository;
+import com.nekocong.text2sql.security.Roles;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -19,6 +23,12 @@ class AuthControllerTest {
 
     @LocalServerPort
     private int port;
+
+    @Autowired
+    private UserRepository users;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     private WebTestClient client;
 
@@ -54,6 +64,26 @@ class AuthControllerTest {
                 .expectBody()
                 .jsonPath("$.username")
                 .isEqualTo(username);
+    }
+
+    @Test
+    void legacyRoleAccountCanStillLogInAndKeepsItsRole() {
+        // Accounts created before the campus dataset carry the legacy "user" role. Signing in must
+        // not blow up on an unrecognized role claim; the permission layer rejects the scope later.
+        String username = "legacy" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        users.insert(username, passwordEncoder.encode("secret123"), "Legacy", Roles.USER).block();
+
+        String token = TestAuth.login(client, username, "secret123");
+
+        client.get()
+                .uri("/api/auth/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.role")
+                .isEqualTo(Roles.USER);
     }
 
     @Test

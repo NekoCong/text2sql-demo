@@ -79,7 +79,7 @@ public class DataScopeResolver {
 
     private static Long parseLong(String value, String scopeType) {
         try {
-            return Long.valueOf(value);
+            return Long.valueOf(value == null ? "" : value.trim());
         } catch (NumberFormatException ex) {
             throw denied("数据范围配置无效：" + scopeType + "=" + value);
         }

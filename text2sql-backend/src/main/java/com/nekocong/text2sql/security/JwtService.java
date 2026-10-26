@@ -39,17 +39,21 @@ public class JwtService {
      *
      * @param userId the user id (token subject)
      * @param username the username claim
-     * @param role the role claim ({@code admin} or {@code user})
+     * @param role the role claim ({@code admin}, {@code student} or {@code counselor})
      * @return the compact JWT
      */
     public String issue(String userId, String username, String role) {
         Instant now = Instant.now();
+        String canonical = Roles.normalize(role);
+        // Legacy or unrecognized roles are preserved verbatim so the token stays issuable; the
+        // permission layer rejects them because normalize() no longer recognizes them.
+        String claimRole = canonical != null ? canonical : (role == null ? "" : role);
         JwtClaimsSet claims =
                 JwtClaimsSet.builder()
                         .issuer(properties.getIssuer())
                         .subject(userId)
                         .claim("username", username)
-                        .claim(Roles.CLAIM, Roles.normalize(role))
+                        .claim(Roles.CLAIM, claimRole)
                         .issuedAt(now)
                         .expiresAt(now.plus(properties.getTokenTtlMinutes(), ChronoUnit.MINUTES))
                         .build();

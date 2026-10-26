@@ -3,6 +3,7 @@ package com.nekocong.text2sql.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -80,11 +81,33 @@ class DataScopeResolverTest {
     }
 
     @Test
+    void studentMissingOneScopeAttributeIsRejected() {
+        String userId = "scope-test-partial";
+        scope(userId, "student_id", "71");
+        scope(userId, "student_no", "2023071");
+
+        assertDenied(resolver.resolve(userId, "student"), "未配置数据范围");
+    }
+
+    @Test
+    void counselorWithoutClassesIsRejected() {
+        String userId = "scope-test-counselor-empty";
+        grant("counselor", "campus");
+
+        assertDenied(resolver.resolve(userId, "counselor"), "未配置管理班级");
+    }
+
+    @Test
     void invalidScopeValueIsRejected() {
         String userId = "scope-test-invalid";
         scope(userId, "class_id", "not-a-number");
 
         assertDenied(resolver.resolve(userId, "student"), "配置无效");
+    }
+
+    @AfterEach
+    void cleanUp() {
+        client.sql("DELETE FROM user_scope WHERE user_id LIKE 'scope-test-%'").then().block();
     }
 
     private void assertDenied(reactor.core.publisher.Mono<DataScope> result, String messagePart) {

@@ -86,8 +86,9 @@ public class SecurityConfig {
      * Maps the JWT {@code role} claim to a single granted authority.
      *
      * <p>An unknown or missing role maps to {@code ROLE_NONE}: the caller stays authenticated but
-     * carries no role authority, so both the data-permission layer and role-guarded endpoints
-     * reject it.
+     * carries no role authority. Enforcement that turns that into a rejection lives in the
+     * data-permission layer (which validates the resolved scope on every query); no endpoint is
+     * role-guarded by URL pattern here.
      *
      * @return the converter
      */
