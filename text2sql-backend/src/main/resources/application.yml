@@ -53,7 +53,7 @@ text2sql:
         username: "${CAMPUS_DB_USERNAME:root}"
         password: "${CAMPUS_DB_PASSWORD:root}"
         dialect: MYSQL
-        seed: false
+        seed: true
 
   # --- NL2SQL pipeline limits (safety) ---
   nl2sql:

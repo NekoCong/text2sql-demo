@@ -41,6 +41,8 @@ class Nl2SqlCoreIntegrationTest {
         List<TableSchema> tables = introspector.introspect(registry.resolve(null));
         List<String> names = tables.stream().map(TableSchema::name).map(String::toLowerCase).toList();
         assertThat(names).contains("class", "course", "student", "score", "attendance");
+        // The e-commerce demo is gone with its dataset.
+        assertThat(names).doesNotContain("orders", "products", "customers", "order_items");
 
         TableSchema score =
                 tables.stream().filter(t -> t.name().equalsIgnoreCase("score")).findFirst().orElseThrow();

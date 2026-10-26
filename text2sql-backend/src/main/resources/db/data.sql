@@ -4,28 +4,34 @@
 --   student01 -> 张伟   (1 班)
 --   student02 -> 李娜   (1 班)  <- 与 student01 同班，用于"同班也互不可见"的对照
 --   student03 -> 王强   (2 班)  <- 异班
+--   赵敏      -> 2 班，无独立账号，仅辅导员/管理员可见
 --   陈晨      -> 3 班，仅管理员可见
 -- 成绩与考勤的 class_id 必须与所属学生的班级一致（数据权限按班级/学生两侧过滤时依赖此约束）。
+--
+-- 该脚本在每次启动时随 schema.sql 一起执行（seed: true），因此使用固定 id + INSERT IGNORE
+-- 保证可重复执行不产生重复行；SET NAMES 固定连接字符集，避免 mysql CLI 按 latin1 解释中文。
 
-INSERT INTO class (id, name, grade, head_teacher) VALUES
+SET NAMES utf8mb4;
+
+INSERT IGNORE INTO class (id, name, grade, head_teacher) VALUES
     (1, '高一(1)班', '2023', '王老师'),
     (2, '高一(2)班', '2023', '李老师'),
     (3, '高二(3)班', '2022', '张老师');
 
-INSERT INTO course (id, code, name, credits) VALUES
+INSERT IGNORE INTO course (id, code, name, credits) VALUES
     (1, 'CHN101', '语文', 3.0),
     (2, 'MATH101', '数学', 4.0),
     (3, 'ENG101', '英语', 4.0),
     (4, 'PHY101', '物理', 3.0);
 
-INSERT INTO student (id, student_no, name, gender, class_id, enrolled_at, phone) VALUES
+INSERT IGNORE INTO student (id, student_no, name, gender, class_id, enrolled_at, phone) VALUES
     (1, '2023001', '张伟', '男', 1, '2023-09-01', '13800000001'),
     (2, '2023002', '李娜', '女', 1, '2023-09-01', '13800000002'),
     (3, '2023003', '王强', '男', 2, '2023-09-01', '13800000003'),
     (4, '2023004', '赵敏', '女', 2, '2023-09-01', '13800000004'),
     (5, '2023005', '陈晨', '男', 3, '2022-09-01', '13800000005');
 
-INSERT INTO score (id, student_id, course_id, term, score, class_id) VALUES
+INSERT IGNORE INTO score (id, student_id, course_id, term, score, class_id) VALUES
     (1,  1, 1, '2023-2024-1', 88.50, 1),
     (2,  1, 2, '2023-2024-1', 92.00, 1),
     (3,  1, 3, '2023-2024-1', 79.00, 1),
@@ -47,7 +53,7 @@ INSERT INTO score (id, student_id, course_id, term, score, class_id) VALUES
     (19, 5, 3, '2022-2023-2', 74.50, 3),
     (20, 5, 4, '2022-2023-2', 82.00, 3);
 
-INSERT INTO attendance (id, student_id, course_id, class_date, status, class_id) VALUES
+INSERT IGNORE INTO attendance (id, student_id, course_id, class_date, status, class_id) VALUES
     (1,  1, 1, '2024-03-04', '出勤', 1),
     (2,  1, 2, '2024-03-04', '出勤', 1),
     (3,  1, 3, '2024-03-05', '迟到', 1),

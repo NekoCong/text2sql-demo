@@ -105,6 +105,24 @@ class SeedDataScriptTest {
                                 .collectList()
                                 .block())
                 .hasSize(2);
+
+        // Re-running the script must be a no-op: fixed ids plus INSERT IGNORE make the seed
+        // re-executable, which matters because the same file runs on every startup when seeding.
+        runScript("db/app-data.sql");
+        assertThat(users.findByUsername("student01").block().id()).isEqualTo(student01.id());
+        assertThat(scopeValues(student01.id(), "class_id")).containsExactly("1");
+        assertThat(countRows("SELECT COUNT(*) AS n FROM app_user WHERE id LIKE 'seed-user-%'"))
+                .isEqualTo(5);
+        assertThat(countRows("SELECT COUNT(*) AS n FROM user_scope WHERE user_id LIKE 'seed-user-%'"))
+                .isEqualTo(11);
+        assertThat(
+                        countRows(
+                                "SELECT COUNT(*) AS n FROM conversation WHERE id LIKE 'seed-conv-%'"))
+                .isEqualTo(5);
+    }
+
+    private Long countRows(String sql) {
+        return client.sql(sql).map((row, meta) -> row.get("n", Long.class)).one().block();
     }
 
     private List<String> scopeValues(String userId, String scopeType) {
