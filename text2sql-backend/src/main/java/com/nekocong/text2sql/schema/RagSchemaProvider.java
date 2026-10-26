@@ -77,10 +77,9 @@ public class RagSchemaProvider implements SchemaProvider {
     @Override
     public String renderForPrompt(String datasourceId, DataScope scope, String question) {
         DataSource dataSource = registry.resolve(datasourceId);
-        java.util.Set<String> allowed = policy.tablesFor(scope.role());
         List<TableSchema> tables =
                 introspector.introspect(dataSource).stream()
-                        .filter(table -> allowed.contains(table.name().toLowerCase(java.util.Locale.ROOT)))
+                        .filter(table -> policy.allows(scope, table.name()))
                         .toList();
         if (tables.isEmpty()) {
             return "";

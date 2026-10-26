@@ -76,7 +76,7 @@ class SqlToolsTest {
     }
 
     @Test
-    void describeTableRejectsTablesOutsideTheScope() {
+    void describeTableReportsUnknownTable() {
         String answer = tools(new AtomicReference<>()).describeTable("salary", null, studentScope());
 
         assertThat(answer).contains("Unknown table 'salary'");

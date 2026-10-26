@@ -13,8 +13,6 @@ import com.nekocong.text2sql.service.Text2SqlPipelineService;
 import io.agentscope.core.tool.Tool;
 import io.agentscope.core.tool.ToolParam;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
@@ -160,9 +158,8 @@ public class SqlTools {
     }
 
     private List<TableSchema> describeTables(String datasourceId, DataScope scope) {
-        Set<String> allowed = policy.tablesFor(scope.role());
         return introspector.introspect(registry.resolve(datasourceId)).stream()
-                .filter(table -> allowed.contains(table.name().toLowerCase(Locale.ROOT)))
+                .filter(table -> policy.allows(scope, table.name()))
                 .toList();
     }
 }

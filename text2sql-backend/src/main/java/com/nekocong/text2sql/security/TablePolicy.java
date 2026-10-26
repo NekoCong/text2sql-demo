@@ -37,6 +37,23 @@ public class TablePolicy {
     }
 
     /**
+     * Reports whether the caller may reference a table.
+     *
+     * <p>Admins bypass the whitelist (they are unrestricted everywhere else too); every other role
+     * is limited to the tables declared for it, and anything undeclared is denied.
+     *
+     * @param scope the caller's scope
+     * @param table the referenced table (unqualified)
+     * @return {@code true} when the table is visible to the caller
+     */
+    public boolean allows(DataScope scope, String table) {
+        if (scope.isAdmin()) {
+            return true;
+        }
+        return tablesFor(scope.role()).contains(table.toLowerCase(Locale.ROOT));
+    }
+
+    /**
      * Fails when the table is outside the caller's whitelist.
      *
      * @param scope the caller's scope
@@ -44,10 +61,7 @@ public class TablePolicy {
      * @throws SqlPermissionException when the table is not allowed for the role
      */
     public void requireAllowed(DataScope scope, String table) {
-        if (scope.isAdmin()) {
-            return;
-        }
-        if (!tablesFor(scope.role()).contains(table.toLowerCase(Locale.ROOT))) {
+        if (!allows(scope, table)) {
             throw new SqlPermissionException("表 " + table + " 不在当前数据范围内");
         }
     }

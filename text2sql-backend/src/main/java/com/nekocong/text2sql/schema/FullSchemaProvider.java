@@ -6,8 +6,6 @@ import com.nekocong.text2sql.schema.model.TableSchema;
 import com.nekocong.text2sql.security.DataScope;
 import com.nekocong.text2sql.security.TablePolicy;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,10 +63,9 @@ public class FullSchemaProvider implements SchemaProvider {
     @Override
     public String renderForPrompt(String datasourceId, DataScope scope, String question) {
         DataSource dataSource = registry.resolve(datasourceId);
-        Set<String> allowed = policy.tablesFor(scope.role());
         List<TableSchema> tables =
                 introspector.introspect(dataSource).stream()
-                        .filter(table -> allowed.contains(table.name().toLowerCase(Locale.ROOT)))
+                        .filter(table -> policy.allows(scope, table.name()))
                         .toList();
         return render(tables);
     }
