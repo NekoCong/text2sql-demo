@@ -12,7 +12,7 @@ import type {
   ConversationEvent,
   HistoryMessage,
   QueryResult,
-  RunStep,
+  ChatStep,
 } from '@/types'
 import { parseSegments } from '@/utils/markdown'
 
@@ -159,27 +159,24 @@ function segments(content: string) {
 }
 
 /** Steps that carry a real detail line; empty-detail steps are not rendered. */
-function visibleSteps(message: ChatMessage): RunStep[] {
+function visibleSteps(message: ChatMessage): ChatStep[] {
   return (message.steps ?? []).filter((step) => stepText(step).length > 0)
 }
 
 /** Readable label for a pipeline step or an agent tool step. */
-function stepText(step: RunStep): string {
-  if (step.detail) {
+function stepText(step: ChatStep): string {
+  if (step.phase !== 'tool') {
     return step.detail
   }
-  if (step.phase === 'tool') {
-    const name = step.tool || '工具'
-    if (step.status === 'start') {
-      return `调用 ${name}…`
-    }
-    if (step.state === 'success') {
-      return `${name} 完成`
-    }
-    const suffix = step.reason ? `：${step.reason}` : ''
-    return `${name} ${step.state ?? '结束'}${suffix}`
+  const name = step.tool || '工具'
+  if (step.status === 'start') {
+    return `调用 ${name}…`
   }
-  return ''
+  if (step.state === 'success') {
+    return `${name} 完成`
+  }
+  const suffix = step.reason ? `：${step.reason}` : ''
+  return `${name} ${step.state ?? '结束'}${suffix}`
 }
 
 /** Structured messages (steps / SQL / rows) get the full bubble width. */
@@ -324,6 +321,9 @@ watch(
                 </el-tag>
                 <el-tag v-if="message.scopeApplied" size="small" effect="plain" type="success">
                   已按当前数据范围过滤
+                </el-tag>
+                <el-tag v-if="message.rowCount !== undefined" size="small" effect="plain" type="info">
+                  {{ message.rowCount }} 行
                 </el-tag>
                 <el-button
                   class="sql__copy"

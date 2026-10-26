@@ -77,14 +77,21 @@ export type RunPhase = 'introspect' | 'generate' | 'execute'
 
 /** A single pipeline progress entry emitted while answering. */
 export interface RunStep {
-  phase: RunPhase | 'tool' | string
-  detail?: string
-  /** Agent tool steps: tool name, start/end status, terminal state and failure reason. */
-  tool?: string
-  status?: string
+  phase: RunPhase
+  detail: string
+}
+
+/** A tool step emitted by the agent stream. */
+export interface ToolStep {
+  phase: 'tool'
+  tool: string
+  status: string
   state?: string
   reason?: string
 }
+
+/** A pipeline progress entry or an agent tool step. */
+export type ChatStep = RunStep | ToolStep
 
 /** Payload of the `sql` SSE event. */
 export interface SqlEvent {
@@ -119,7 +126,7 @@ export interface ChatMessage {
   /** True when the message represents an error. */
   error?: boolean
   /** Pipeline progress reported by the backend, in arrival order. */
-  steps?: RunStep[]
+  steps?: ChatStep[]
   /** Generated SQL, rendered from the `sql` event. */
   sql?: string
   /** Dialect of the generated SQL. */
@@ -132,6 +139,8 @@ export interface ChatMessage {
   chart?: ChartSpec
   /** True when the displayed SQL was filtered for the caller's data scope. */
   scopeApplied?: boolean
+  /** Rows produced by the agent's query (the agent stream has no result table). */
+  rowCount?: number
 }
 
 /** Payload of the `conversation` SSE event: the conversation the exchange persisted to. */

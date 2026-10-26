@@ -7,6 +7,11 @@ function newId(): string {
   return crypto.randomUUID()
 }
 
+/** Appends an error line without discarding partial output already streamed. */
+function appendError(content: string, message: string): string {
+  return content ? `${content}\n\n⚠️ ${message}` : `⚠️ ${message}`
+}
+
 /**
  * Conversation state for the text-to-SQL chat: the message list currently on screen,
  * the datasource catalog and the streaming lifecycle. Persisted conversations live in
@@ -79,6 +84,7 @@ export const useChatStore = defineStore('chat', () => {
           const assistant = messages.value[assistantIndex]
           assistant.sql = payload.sql
           assistant.scopeApplied = payload.scopeApplied === true
+          assistant.rowCount = payload.rowCount
         },
         onDone: () => {
           messages.value[assistantIndex].streaming = false
@@ -89,7 +95,7 @@ export const useChatStore = defineStore('chat', () => {
           const assistant = messages.value[assistantIndex]
           assistant.streaming = false
           assistant.error = true
-          assistant.content = assistant.content || `⚠️ ${message}`
+          assistant.content = appendError(assistant.content, message)
           streaming.value = false
           cancelStream = null
         },
@@ -131,7 +137,7 @@ export const useChatStore = defineStore('chat', () => {
         const assistant = messages.value[assistantIndex]
         assistant.streaming = false
         assistant.error = true
-        assistant.content = assistant.content || `⚠️ ${message}`
+        assistant.content = appendError(assistant.content, message)
         streaming.value = false
         cancelStream = null
       },
