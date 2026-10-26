@@ -153,6 +153,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- SQL AST parsing for row-level permission injection (DataScopeRewriter). -->
+        <dependency>
+            <groupId>com.github.jsqlparser</groupId>
+            <artifactId>jsqlparser</artifactId>
+            <version>4.9</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
