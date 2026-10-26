@@ -63,4 +63,59 @@ public class AccessRepository {
                 .collectList()
                 .map(LinkedHashSet::new);
     }
+
+    /** One {@code datasource_access} row. */
+    public record RoleGrant(String role, String datasourceId) {}
+
+    /**
+     * Reads every role -> datasource grant.
+     *
+     * @return the grants
+     */
+    public Mono<List<RoleGrant>> grants() {
+        return client.sql("SELECT role, datasource_id FROM datasource_access ORDER BY role, datasource_id")
+                .map(
+                        (row, meta) ->
+                                new RoleGrant(
+                                        row.get("role", String.class), row.get("datasource_id", String.class)))
+                .all()
+                .collectList();
+    }
+
+    /**
+     * Grants a role access to a datasource (idempotent).
+     *
+     * @param role the canonical role
+     * @param datasourceId the datasource id
+     * @return completion
+     */
+    public Mono<Void> grant(String role, String datasourceId) {
+        return client.sql(
+                        "DELETE FROM datasource_access WHERE role = :role AND datasource_id = :datasourceId")
+                .bind("role", role)
+                .bind("datasourceId", datasourceId)
+                .then()
+                .then(
+                        client.sql(
+                                        "INSERT INTO datasource_access (role, datasource_id) "
+                                                + "VALUES (:role, :datasourceId)")
+                                .bind("role", role)
+                                .bind("datasourceId", datasourceId)
+                                .then());
+    }
+
+    /**
+     * Revokes a role's access to a datasource.
+     *
+     * @param role the canonical role
+     * @param datasourceId the datasource id
+     * @return completion
+     */
+    public Mono<Void> revoke(String role, String datasourceId) {
+        return client.sql(
+                        "DELETE FROM datasource_access WHERE role = :role AND datasource_id = :datasourceId")
+                .bind("role", role)
+                .bind("datasourceId", datasourceId)
+                .then();
+    }
 }

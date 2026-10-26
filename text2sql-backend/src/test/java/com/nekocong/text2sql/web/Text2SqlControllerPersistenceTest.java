@@ -61,7 +61,7 @@ class Text2SqlControllerPersistenceTest {
         assertThat(conversation).isNotNull();
 
         Text2SqlPipelineService stubPipeline =
-                new Text2SqlPipelineService(null, null, null, null, null, null, null, null) {
+                new Text2SqlPipelineService(null, null, null, null, null, null, null, null, null) {
                     @Override
                     public Flux<Text2SqlEvent> stream(
                             DataScope scope, String datasourceId, String question) {

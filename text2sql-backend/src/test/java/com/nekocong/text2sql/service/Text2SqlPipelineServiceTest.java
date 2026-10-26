@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nekocong.text2sql.nl2sql.ExecutionListener;
 import com.nekocong.text2sql.datasource.DataSourceRegistry;
+import com.nekocong.text2sql.datasource.DatasourceAccessGuard;
 import com.nekocong.text2sql.gbi.ChartInference;
 import com.nekocong.text2sql.modelconfig.ModelResolver;
 import com.nekocong.text2sql.nl2sql.ChartEvent;
@@ -97,6 +98,7 @@ class Text2SqlPipelineServiceTest {
                 stub,
                 safetyValidator,
                 new DataScopeRewriter(new TablePolicy()),
+                new DatasourceAccessGuard(registry),
                 sqlExecutor,
                 new ChartInference());
     }

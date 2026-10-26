@@ -73,6 +73,8 @@ public class SecurityConfig {
                                                 "/api/text2sql/health",
                                                 "/actuator/**")
                                         .permitAll()
+                                        .pathMatchers("/api/admin/**")
+                                        .hasRole("ADMIN")
                                         .anyExchange()
                                         .authenticated())
                 .oauth2ResourceServer(

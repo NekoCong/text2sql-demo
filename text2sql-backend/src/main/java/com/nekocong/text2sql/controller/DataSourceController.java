@@ -3,11 +3,15 @@ package com.nekocong.text2sql.controller;
 import com.nekocong.text2sql.controller.dto.DataSourceRequest;
 import com.nekocong.text2sql.controller.dto.DataSourceView;
 import com.nekocong.text2sql.datasource.ConnectionTestResult;
+import com.nekocong.text2sql.security.DataScopeResolver;
+import com.nekocong.text2sql.security.Roles;
 import com.nekocong.text2sql.service.DataSourceService;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,28 +36,41 @@ import reactor.core.scheduler.Schedulers;
 public class DataSourceController {
 
     private final DataSourceService service;
+    private final DataScopeResolver scopes;
 
     /**
      * Creates the controller.
      *
      * @param service the datasource service
+     * @param scopes resolves the caller's data scope
      */
-    public DataSourceController(DataSourceService service) {
+    public DataSourceController(DataSourceService service, DataScopeResolver scopes) {
         this.service = service;
+        this.scopes = scopes;
     }
 
     /**
-     * Lists all datasources (without passwords).
+     * Lists the datasources the caller may use (without passwords).
      *
+     * @param jwt the bearer token
      * @return the descriptors
      */
     @GetMapping
-    public Mono<List<DataSourceView>> list() {
-        return Mono.fromSupplier(
-                () -> {
-                    String defaultId = service.defaultId();
-                    return service.list().stream().map(definition -> DataSourceView.of(definition, defaultId)).toList();
-                });
+    public Mono<List<DataSourceView>> list(@AuthenticationPrincipal Jwt jwt) {
+        return scopes
+                .resolve(jwt.getSubject(), jwt.getClaimAsString(Roles.CLAIM))
+                .map(
+                        scope -> {
+                            String defaultId = service.defaultId();
+                            return service.list().stream()
+                                    .filter(
+                                            definition ->
+                                                    scope.isAdmin()
+                                                            || scope.allowedDatasources()
+                                                                    .contains(definition.getId()))
+                                    .map(definition -> DataSourceView.of(definition, defaultId))
+                                    .toList();
+                        });
     }
 
     /**

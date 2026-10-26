@@ -31,8 +31,7 @@ final class TestAuth {
     }
 
     /** Logs in and returns the access token. */
-    static String login(WebTestClient client, String username, String password) {
-        String body =
+    static String login(WebTestClient client, String username, String password) {        String body =
                 client.post()
                         .uri("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -47,6 +46,25 @@ final class TestAuth {
             return MAPPER.readTree(body).get("token").asText();
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to parse login token", ex);
+        }
+    }
+
+    /** Reads the current user's id from {@code /api/auth/me}. */
+    static String currentUserId(WebTestClient client, String token) {
+        String body =
+                client.get()
+                        .uri("/api/auth/me")
+                        .header(org.springframework.http.HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBody(String.class)
+                        .returnResult()
+                        .getResponseBody();
+        try {
+            return MAPPER.readTree(body).get("id").asText();
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to parse current user", ex);
         }
     }
 }

@@ -38,7 +38,7 @@ class SqlToolsTest {
 
     private SqlTools tools(AtomicReference<DataScope> captured) {
         Text2SqlPipelineService stub =
-                new Text2SqlPipelineService(null, null, null, null, null, null, null, null) {
+                new Text2SqlPipelineService(null, null, null, null, null, null, null, null, null) {
                     @Override
                     public Text2SqlResult runBlocking(
                             DataScope scope,
@@ -89,7 +89,7 @@ class SqlToolsTest {
     @Test
     void queryDatabasePropagatesPipelineFailures() {
         Text2SqlPipelineService failing =
-                new Text2SqlPipelineService(null, null, null, null, null, null, null, null) {
+                new Text2SqlPipelineService(null, null, null, null, null, null, null, null, null) {
                     @Override
                     public Text2SqlResult runBlocking(
                             DataScope scope,

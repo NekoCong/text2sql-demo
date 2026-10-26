@@ -1,6 +1,7 @@
 package com.nekocong.text2sql.service;
 
 import com.nekocong.text2sql.datasource.DataSourceRegistry;
+import com.nekocong.text2sql.datasource.DatasourceAccessGuard;
 import com.nekocong.text2sql.gbi.ChartInference;
 import com.nekocong.text2sql.modelconfig.ModelResolver;
 import com.nekocong.text2sql.nl2sql.ChartEvent;
@@ -40,6 +41,7 @@ public class Text2SqlPipelineService {
     private final SqlGenerationService generationService;
     private final SqlSafetyValidator safetyValidator;
     private final DataScopeRewriter rewriter;
+    private final DatasourceAccessGuard datasourceGuard;
     private final SqlExecutor sqlExecutor;
     private final ChartInference chartInference;
 
@@ -62,6 +64,7 @@ public class Text2SqlPipelineService {
             SqlGenerationService generationService,
             SqlSafetyValidator safetyValidator,
             DataScopeRewriter rewriter,
+            DatasourceAccessGuard datasourceGuard,
             SqlExecutor sqlExecutor,
             ChartInference chartInference) {
         this.registry = registry;
@@ -70,6 +73,7 @@ public class Text2SqlPipelineService {
         this.generationService = generationService;
         this.safetyValidator = safetyValidator;
         this.rewriter = rewriter;
+        this.datasourceGuard = datasourceGuard;
         this.sqlExecutor = sqlExecutor;
         this.chartInference = chartInference;
     }
@@ -97,7 +101,7 @@ public class Text2SqlPipelineService {
      */
     public Mono<Text2SqlResult> run(
             DataScope scope, String datasourceId, String question, ExecutionListener listener) {
-        String id = resolveId(datasourceId);
+        String id = resolveId(scope, datasourceId);
         String dialect = dialectOf(id);
         return Mono.zip(schema(id, scope, question), modelResolver.resolve(scope.userId()))
                 .flatMap(pair -> generationService.generate(pair.getT2(), dialect, pair.getT1(), question))
@@ -155,7 +159,7 @@ public class Text2SqlPipelineService {
      */
     public Flux<Text2SqlEvent> stream(
             DataScope scope, String datasourceId, String question, ExecutionListener listener) {
-        String id = resolveId(datasourceId);
+        String id = resolveId(scope, datasourceId);
         String dialect = dialectOf(id);
         return Flux.concat(
                 Flux.just(new StepEvent("introspect", "读取数据源表结构")),
@@ -224,10 +228,8 @@ public class Text2SqlPipelineService {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
-    private String resolveId(String datasourceId) {
-        String id = (datasourceId == null || datasourceId.isBlank()) ? registry.defaultId() : datasourceId;
-        registry.definition(id); // fail fast on an unknown id
-        return id;
+    private String resolveId(DataScope scope, String datasourceId) {
+        return datasourceGuard.resolve(scope, datasourceId);
     }
 
     private String dialectOf(String id) {

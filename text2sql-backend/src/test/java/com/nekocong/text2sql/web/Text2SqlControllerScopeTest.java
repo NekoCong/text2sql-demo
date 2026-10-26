@@ -41,7 +41,7 @@ class Text2SqlControllerScopeTest {
 
     private Text2SqlController controller(AtomicReference<DataScope> captured) {
         Text2SqlPipelineService stub =
-                new Text2SqlPipelineService(null, null, null, null, null, null, null, null) {
+                new Text2SqlPipelineService(null, null, null, null, null, null, null, null, null) {
                     @Override
                     public Mono<Text2SqlResult> run(
                             DataScope scope, String datasourceId, String question) {

@@ -2,6 +2,7 @@ package com.nekocong.text2sql.web;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
@@ -19,10 +20,36 @@ class Text2SqlControllerTest {
     private WebTestClient client;
     private String token;
 
+    @Autowired
+    private org.springframework.r2dbc.core.DatabaseClient db;
+
     @BeforeEach
     void setUp() {
         client = WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
         token = TestAuth.registerAndLogin(client);
+        seedScope(TestAuth.currentUserId(client, token));
+    }
+
+    private void seedScope(String userId) {
+        insertScope(userId, "class_id", "1");
+        insertScope(userId, "student_id", "1");
+        insertScope(userId, "student_no", "2023001");
+        db.sql(
+                        "INSERT INTO datasource_access (role, datasource_id) VALUES ('student', 'campus')")
+                .then()
+                .onErrorResume(error -> reactor.core.publisher.Mono.empty())
+                .block();
+    }
+
+    private void insertScope(String userId, String type, String value) {
+        db.sql(
+                        "INSERT INTO user_scope (user_id, scope_type, scope_value) "
+                                + "VALUES (:userId, :type, :value)")
+                .bind("userId", userId)
+                .bind("type", type)
+                .bind("value", value)
+                .then()
+                .block();
     }
 
     @Test
