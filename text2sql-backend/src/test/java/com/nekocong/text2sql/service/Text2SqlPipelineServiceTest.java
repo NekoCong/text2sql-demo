@@ -92,21 +92,21 @@ class Text2SqlPipelineServiceTest {
     @Test
     void runsEndToEndWithStubbedModel() {
         Text2SqlPipelineService pipeline =
-                pipelineReturning("SELECT COUNT(*) AS order_count FROM orders", "counts all orders");
+                pipelineReturning("SELECT COUNT(*) AS student_count FROM student", "counts all students");
 
-        Text2SqlResult result = pipeline.run("1", null, "how many orders are there?").block();
+        Text2SqlResult result = pipeline.run("1", null, "how many students are there?").block();
 
-        assertThat(result.datasourceId()).isEqualTo("demo");
-        assertThat(result.sql()).isEqualTo("SELECT COUNT(*) AS order_count FROM orders");
+        assertThat(result.datasourceId()).isEqualTo("campus");
+        assertThat(result.sql()).isEqualTo("SELECT COUNT(*) AS student_count FROM student");
         assertThat(result.result().rowCount()).isEqualTo(1);
-        assertThat(result.result().columns()).anyMatch(c -> c.name().equalsIgnoreCase("order_count"));
+        assertThat(result.result().columns()).anyMatch(c -> c.name().equalsIgnoreCase("student_count"));
     }
 
     @Test
     void rejectsUnsafeGeneratedSqlBeforeExecution() {
-        Text2SqlPipelineService pipeline = pipelineReturning("DROP TABLE orders", null);
+        Text2SqlPipelineService pipeline = pipelineReturning("DROP TABLE student", null);
 
-        assertThatThrownBy(() -> pipeline.run("1", null, "drop orders").block())
+        assertThatThrownBy(() -> pipeline.run("1", null, "drop student").block())
                 .isInstanceOf(SqlSafetyException.class);
     }
 
@@ -121,9 +121,9 @@ class Text2SqlPipelineServiceTest {
     @Test
     void streamEmitsStepsSqlRowsAndChartInOrder() {
         Text2SqlPipelineService pipeline =
-                pipelineReturning("SELECT id FROM orders ORDER BY id", "lists order ids");
+                pipelineReturning("SELECT id FROM student ORDER BY id", "lists student ids");
 
-        List<Text2SqlEvent> events = pipeline.stream("1", null, "list order ids").collectList().block();
+        List<Text2SqlEvent> events = pipeline.stream("1", null, "list student ids").collectList().block();
 
         assertThat(events).isNotNull();
         assertThat(events.get(0)).isInstanceOf(StepEvent.class);

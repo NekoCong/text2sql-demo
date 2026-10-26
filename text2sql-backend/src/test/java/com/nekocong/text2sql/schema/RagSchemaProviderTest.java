@@ -34,9 +34,9 @@ class RagSchemaProviderTest {
     @Autowired
     private SchemaRenderer renderer;
 
-    /** Maps text to a one-hot vector over the four demo tables (word-boundary matched). */
+    /** Maps text to a one-hot vector over the five demo tables (word-boundary matched). */
     private static final class TableTokenEmbedding implements EmbeddingModel {
-        private static final String[] TABLES = {"orders", "products", "customers", "order_items"};
+        private static final String[] TABLES = {"class", "course", "student", "score", "attendance"};
 
         @Override
         public Mono<double[]> embed(ContentBlock block) {
@@ -73,14 +73,14 @@ class RagSchemaProviderTest {
 
     @Test
     void selectsRelevantTableAndExpandsForeignKeyNeighbours() {
-        String ddl = provider().renderForPrompt(null, "how many orders are there");
+        String ddl = provider().renderForPrompt(null, "attendance records");
 
-        // 'orders' is the top match; its FK neighbours (customers, order_items) are pulled in...
-        assertThat(ddl).containsIgnoringCase("CREATE TABLE orders");
-        assertThat(ddl).containsIgnoringCase("CREATE TABLE customers");
-        assertThat(ddl).containsIgnoringCase("CREATE TABLE order_items");
+        // 'attendance' is the top match; its FK neighbours (student, course) are pulled in...
+        assertThat(ddl).containsIgnoringCase("CREATE TABLE attendance");
+        assertThat(ddl).containsIgnoringCase("CREATE TABLE student");
+        assertThat(ddl).containsIgnoringCase("CREATE TABLE course");
         // ...but an unrelated table is left out.
-        assertThat(ddl).doesNotContainIgnoringCase("CREATE TABLE products");
+        assertThat(ddl).doesNotContainIgnoringCase("CREATE TABLE class");
     }
 
     @Test
@@ -110,7 +110,7 @@ class RagSchemaProviderTest {
 
         String ddl = provider.renderForPrompt(null, "anything");
 
-        assertThat(ddl).containsIgnoringCase("CREATE TABLE orders");
-        assertThat(ddl).containsIgnoringCase("CREATE TABLE products");
+        assertThat(ddl).containsIgnoringCase("CREATE TABLE student");
+        assertThat(ddl).containsIgnoringCase("CREATE TABLE attendance");
     }
 }

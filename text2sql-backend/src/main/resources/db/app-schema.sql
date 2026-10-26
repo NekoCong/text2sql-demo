@@ -9,9 +9,10 @@ CREATE TABLE IF NOT EXISTS app_user (
     username      VARCHAR(64)  NOT NULL,
     password_hash VARCHAR(100) NOT NULL,
     display_name  VARCHAR(100),
-    -- Role name: 'admin' sees every conversation, 'user' only its own rows. Assigned out of band
-    -- (seed SQL or a direct update); self-service registration always inserts 'user'.
-    role          VARCHAR(32)  NOT NULL DEFAULT 'user',
+    -- Role name: 'admin' sees everything, 'student' is limited to its own rows, 'counselor' to the
+    -- classes it manages. Assigned out of band (seed SQL or a direct update); self-service
+    -- registration always inserts 'student'.
+    role          VARCHAR(32)  NOT NULL DEFAULT 'student',
     created_at    BIGINT       NOT NULL,
     CONSTRAINT uk_user_username UNIQUE (username)
 );
@@ -47,4 +48,25 @@ CREATE TABLE IF NOT EXISTS message (
     chart_json      TEXT,
     rows_json       TEXT,
     created_at      BIGINT      NOT NULL
+);
+
+-- Principal attributes used by the data-permission layer. Deliberately stored in the application
+-- database (the identity side) rather than the analysed business database: a query must never have
+-- to read the protected data source in order to learn who the caller is.
+--
+--   scope_type = 'class_id'    -> a class the principal may see (counselor: many rows)
+--   scope_type = 'student_id'  -> the principal's own business-database student id
+--   scope_type = 'student_no'  -> the principal's own student number (used for self-scoped queries)
+CREATE TABLE IF NOT EXISTS user_scope (
+    user_id     VARCHAR(64) NOT NULL,
+    scope_type  VARCHAR(32) NOT NULL,
+    scope_value VARCHAR(64) NOT NULL,
+    PRIMARY KEY (user_id, scope_type, scope_value)
+);
+
+-- Which datasource each role may query. Admins are unrestricted and therefore need no rows here.
+CREATE TABLE IF NOT EXISTS datasource_access (
+    role          VARCHAR(32) NOT NULL,
+    datasource_id VARCHAR(64) NOT NULL,
+    PRIMARY KEY (role, datasource_id)
 );

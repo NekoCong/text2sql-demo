@@ -15,7 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Integration test for the deterministic NL2SQL core against the seeded H2 demo database — no LLM
+ * Integration test for the deterministic NL2SQL core against the seeded H2 campus database — no LLM
  * required. Exercises introspection, schema rendering and read-only execution end to end.
  */
 @SpringBootTest
@@ -37,44 +37,44 @@ class Nl2SqlCoreIntegrationTest {
     private SqlSafetyValidator safetyValidator;
 
     @Test
-    void introspectsSeededDemoSchema() {
+    void introspectsSeededCampusSchema() {
         List<TableSchema> tables = introspector.introspect(registry.resolve(null));
         List<String> names = tables.stream().map(TableSchema::name).map(String::toLowerCase).toList();
-        assertThat(names).contains("customers", "products", "orders", "order_items");
+        assertThat(names).contains("class", "course", "student", "score", "attendance");
 
-        TableSchema orders =
-                tables.stream().filter(t -> t.name().equalsIgnoreCase("orders")).findFirst().orElseThrow();
-        assertThat(orders.columns())
-                .anyMatch(c -> c.name().equalsIgnoreCase("customer_id") && !c.nullable());
-        assertThat(orders.foreignKeys())
-                .anyMatch(fk -> fk.referencedTable().equalsIgnoreCase("customers"));
+        TableSchema score =
+                tables.stream().filter(t -> t.name().equalsIgnoreCase("score")).findFirst().orElseThrow();
+        assertThat(score.columns())
+                .anyMatch(c -> c.name().equalsIgnoreCase("student_id") && !c.nullable());
+        assertThat(score.foreignKeys())
+                .anyMatch(fk -> fk.referencedTable().equalsIgnoreCase("student"));
     }
 
     @Test
     void rendersPromptSchemaAsDdl() {
-        String ddl = schemaProvider.renderForPrompt(null, "orders per city");
-        assertThat(ddl).contains("CREATE TABLE").containsIgnoringCase("customers");
+        String ddl = schemaProvider.renderForPrompt(null, "平均分");
+        assertThat(ddl).contains("CREATE TABLE").containsIgnoringCase("student");
     }
 
     @Test
     void executesReadOnlyAggregate() {
         String sql =
                 safetyValidator.validateAndNormalize(
-                        "SELECT c.city AS city, COUNT(*) AS order_count "
-                                + "FROM orders o JOIN customers c ON o.customer_id = c.id "
-                                + "GROUP BY c.city ORDER BY order_count DESC");
+                        "SELECT s.class_id AS class_id, AVG(sc.score) AS avg_score "
+                                + "FROM score sc JOIN student s ON s.id = sc.student_id "
+                                + "GROUP BY s.class_id ORDER BY class_id");
         QueryResult result = sqlExecutor.executeBlocking(null, sql);
-        assertThat(result.rowCount()).isPositive();
-        assertThat(result.columns()).anyMatch(c -> c.name().equalsIgnoreCase("city"));
-        assertThat(result.columns()).anyMatch(c -> c.name().equalsIgnoreCase("order_count"));
+        assertThat(result.rowCount()).isEqualTo(3);
+        assertThat(result.columns()).anyMatch(c -> c.name().equalsIgnoreCase("class_id"));
+        assertThat(result.columns()).anyMatch(c -> c.name().equalsIgnoreCase("avg_score"));
         assertThat(result.truncated()).isFalse();
     }
 
     @Test
     void respectsRowLimit() {
-        // The demo has 9 order_items; a limit of 0 configured elsewhere is not used here — instead we
-        // assert truncation is detected when more rows exist than the cap by querying a subset.
-        QueryResult result = sqlExecutor.executeBlocking(null, "SELECT * FROM order_items");
+        // The demo has 12 attendance rows; asserting a positive bounded row count keeps the test
+        // honest without depending on the exact seed size.
+        QueryResult result = sqlExecutor.executeBlocking(null, "SELECT * FROM attendance");
         assertThat(result.rowCount()).isBetween(1, 200);
     }
 }

@@ -18,9 +18,10 @@ import reactor.core.scheduler.Schedulers;
  * delegated to {@link UserRepository} and token issuance to {@link JwtService}. CPU-bound password
  * hashing runs on a bounded-elastic scheduler so it never blocks the event loop.
  *
- * <p>Self-service registration always creates a {@link Roles#USER}; elevated roles are assigned out
- * of band (seed SQL or a direct database update), so the registration endpoint cannot be used for
- * privilege escalation.
+ * <p>Self-service registration always creates a {@link Roles#STUDENT}; elevated roles are assigned
+ * out of band (seed SQL or a direct database update), so the registration endpoint cannot be used
+ * for privilege escalation. A freshly registered student has no data scope yet and is therefore
+ * rejected by the data-permission layer until one is configured.
  */
 @Service
 public class AuthService {
@@ -72,7 +73,7 @@ public class AuthService {
                                     Mono.defer(
                                             () ->
                                                     encode(secret)
-                                                            .flatMap(hash -> users.insert(name, hash, display, Roles.USER))
+                                                            .flatMap(hash -> users.insert(name, hash, display, Roles.STUDENT))
                                                             .map(this::issue)));
                 });
     }

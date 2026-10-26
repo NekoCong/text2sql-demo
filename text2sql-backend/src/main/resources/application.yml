@@ -37,33 +37,23 @@ text2sql:
   # Each entry becomes a cached Hikari pool; the agent queries a datasource by `id`.
   #
   # The demo target database lives in the same MySQL server as the application database but in its
-  # own schema ("demo"), created on first connect via createDatabaseIfNotExist. `seed: true` drops
+  # own schema ("campus"), created on first connect via createDatabaseIfNotExist. `seed: true` drops
   # and re-populates the demo tables from db/schema.sql + db/data.sql on every startup, so the demo
   # always begins from a known state (anything written into it by hand is replaced on restart).
   #
   # Do NOT set sslMode=DISABLED: MySQL 8.4 authenticates with caching_sha2_password, and the driver
   # needs either TLS (sslMode=PREFERRED) or allowPublicKeyRetrieval to finish the handshake.
   datasources:
-    default-id: demo
+    default-id: campus
     items:
-      - id: demo
-        name: Demo E-commerce (MySQL)
+      - id: campus
+        name: 智慧校园（MySQL）
         driver: com.mysql.cj.jdbc.Driver
-        url: "${DEMO_DB_JDBC_URL:jdbc:mysql://localhost:3306/demo?createDatabaseIfNotExist=true&sslMode=PREFERRED&allowPublicKeyRetrieval=true&serverTimezone=UTC}"
-        username: "${DEMO_DB_USERNAME:root}"
-        password: "${DEMO_DB_PASSWORD:root}"
+        url: "${CAMPUS_DB_JDBC_URL:jdbc:mysql://localhost:3306/campus?createDatabaseIfNotExist=true&sslMode=PREFERRED&allowPublicKeyRetrieval=true&serverTimezone=UTC}"
+        username: "${CAMPUS_DB_USERNAME:root}"
+        password: "${CAMPUS_DB_PASSWORD:root}"
         dialect: MYSQL
-        seed: true
-      # --- Alternative: keep the demo on in-memory H2 (zero external dependencies) ---
-      # Swap the item above for this one when no MySQL is available.
-      # - id: demo
-      #   name: Demo E-commerce (H2)
-      #   driver: org.h2.Driver
-      #   url: "jdbc:h2:mem:text2sql;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE"
-      #   username: sa
-      #   password: ""
-      #   dialect: H2
-      #   seed: true
+        seed: false
 
   # --- NL2SQL pipeline limits (safety) ---
   nl2sql:

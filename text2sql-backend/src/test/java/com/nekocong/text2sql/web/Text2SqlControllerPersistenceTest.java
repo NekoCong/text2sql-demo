@@ -47,7 +47,7 @@ class Text2SqlControllerPersistenceTest {
     @Test
     void persistsAssistantAnswerWithSqlRowsAndChart() {
         String userId = "u-" + UUID.randomUUID();
-        Conversation conversation = conversations.create(userId, "persist", "demo", null).block();
+        Conversation conversation = conversations.create(userId, "persist", "campus", null).block();
         assertThat(conversation).isNotNull();
 
         Text2SqlPipelineService stubPipeline =
@@ -63,7 +63,7 @@ class Text2SqlControllerPersistenceTest {
                                         1L);
                         return Flux.just(
                                 new StepEvent("introspect", "读取结构"),
-                                new SqlEvent("demo", "H2", "SELECT 1 AS c", "统计计数"),
+                                new SqlEvent("campus", "H2", "SELECT 1 AS c", "统计计数"),
                                 new RowsEvent(rows),
                                 new ChartEvent(new ChartSpec(ChartType.NONE, null, null, null)));
                     }
@@ -73,7 +73,7 @@ class Text2SqlControllerPersistenceTest {
                 new Text2SqlController(stubPipeline, agentService, conversations, objectMapper);
         Jwt jwt = Jwt.withTokenValue("t").header("alg", "none").subject(userId).build();
 
-        controller.stream(jwt, "统计计数", "demo", conversation.id()).collectList().block();
+        controller.stream(jwt, "统计计数", "campus", conversation.id()).collectList().block();
 
         List<ConversationMessage> messages =
                 conversations.messages(conversation.id(), userId, false).collectList().block();

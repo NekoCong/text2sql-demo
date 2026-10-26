@@ -6,6 +6,6 @@ package com.nekocong.text2sql.controller.dto;
  * @param id the user id
  * @param username the username
  * @param displayName the display name (may be {@code null})
- * @param role the role name ({@code admin} or {@code user})
+ * @param role the role name ({@code admin}, {@code student} or {@code counselor})
  */
 public record UserView(String id, String username, String displayName, String role) {}

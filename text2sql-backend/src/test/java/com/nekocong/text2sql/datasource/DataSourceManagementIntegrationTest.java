@@ -24,7 +24,7 @@ class DataSourceManagementIntegrationTest {
     void managesDatasourceLifecycle() {
         String id = "temp-it-ds";
         try {
-            assertThat(registry.definitions()).anyMatch(d -> d.getId().equals("demo"));
+            assertThat(registry.definitions()).anyMatch(d -> d.getId().equals("campus"));
 
             DataSourceDefinition definition = new DataSourceDefinition();
             definition.setId(id);
@@ -65,7 +65,7 @@ class DataSourceManagementIntegrationTest {
     @Test
     void rejectsDuplicateAndInvalidRegistrations() {
         DataSourceDefinition duplicate = new DataSourceDefinition();
-        duplicate.setId("demo");
+        duplicate.setId("campus");
         duplicate.setUrl("jdbc:h2:mem:x");
         assertThatThrownBy(() -> registry.register(duplicate))
                 .isInstanceOf(IllegalArgumentException.class);

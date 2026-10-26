@@ -12,7 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  *
  * <p>{@code jwtSecret} lives under the {@code text2sql.security} prefix, so Spring's relaxed
  * binding alone would only look for {@code TEXT2SQL_SECURITY_JWTSECRET}. The placeholder in
- * {@code application.yaml} is what bridges the documented name. Without this test the failure mode
+ * {@code application.yml} is what bridges the documented name. Without this test the failure mode
  * is silent: a shared deployment would keep signing tokens with the built-in demo key, which is
  * public in this repository, so anyone could forge an admin token.
  */

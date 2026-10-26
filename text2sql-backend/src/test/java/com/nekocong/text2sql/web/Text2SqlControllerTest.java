@@ -46,7 +46,7 @@ class Text2SqlControllerTest {
                 .isOk()
                 .expectBody()
                 .jsonPath("$[0].id")
-                .isEqualTo("demo")
+                .isEqualTo("campus")
                 .jsonPath("$[0].dialect")
                 .isEqualTo("H2")
                 .jsonPath("$[0].default")

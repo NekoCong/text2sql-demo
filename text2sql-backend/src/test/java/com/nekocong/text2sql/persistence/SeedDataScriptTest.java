@@ -10,6 +10,7 @@ import com.nekocong.text2sql.user.AppUser;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,10 +21,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
  * Loads the {@code db/app-data.sql} seed script into the test database and asserts the dataset it
- * produces, including the role assignments that the data-scope rules depend on.
+ * produces, including the roles and data-scope mappings the permission layer depends on.
  *
- * <p>This keeps the seed script honest: a syntax error, a wrong role or a missing conversation is
- * caught here instead of on a fresh server.
+ * <p>This keeps the seed script honest: a syntax error, a wrong role, a missing scope row or a
+ * missing conversation is caught here instead of on a fresh server.
  */
 @SpringBootTest
 class SeedDataScriptTest {
@@ -41,7 +42,7 @@ class SeedDataScriptTest {
     private PasswordEncoder passwordEncoder;
 
     @Test
-    void seedScriptCreatesRolesAndOwnedConversations() {
+    void seedScriptCreatesCampusAccountsScopesAndOwnedConversations() {
         runScript("db/app-data.sql");
 
         AppUser admin = users.findByUsername("admin").block();
@@ -49,42 +50,84 @@ class SeedDataScriptTest {
         assertThat(admin.role()).isEqualTo(Roles.ADMIN);
         assertThat(admin.isAdmin()).isTrue();
 
-        assertThat(users.findByUsername("alice").block().role()).isEqualTo(Roles.USER);
-        assertThat(users.findByUsername("bob").block().role()).isEqualTo(Roles.USER);
+        AppUser student01 = users.findByUsername("student01").block();
+        AppUser student02 = users.findByUsername("student02").block();
+        AppUser student03 = users.findByUsername("student03").block();
+        AppUser counselor01 = users.findByUsername("counselor01").block();
+
+        assertThat(student01.role()).isEqualTo(Roles.STUDENT);
+        assertThat(student02.role()).isEqualTo(Roles.STUDENT);
+        assertThat(student03.role()).isEqualTo(Roles.STUDENT);
+        assertThat(counselor01.role()).isEqualTo(Roles.COUNSELOR);
+        assertThat(student01.isAdmin()).isFalse();
+
+        // The legacy e-commerce accounts are gone with the dataset they belonged to.
+        assertThat(users.findByUsername("alice").block()).isNull();
+        assertThat(users.findByUsername("bob").block()).isNull();
 
         // The bcrypt hashes must match the passwords documented in app-data.sql, docs/deploy.md and
-        // bootstrap.sh. A wrong hash would only surface on a freshly deployed server, as "cannot log
-        // in as admin", which is exactly the demo the seed data exists to enable.
+        // deploy/bootstrap.sh. A wrong hash would only surface on a freshly deployed server.
         assertThat(passwordEncoder.matches("admin123", admin.passwordHash())).isTrue();
-        assertThat(passwordEncoder.matches("alice123", users.findByUsername("alice").block().passwordHash()))
-                .isTrue();
-        assertThat(passwordEncoder.matches("bob123", users.findByUsername("bob").block().passwordHash()))
-                .isTrue();
+        assertThat(passwordEncoder.matches("student123", student01.passwordHash())).isTrue();
+        assertThat(passwordEncoder.matches("counselor123", counselor01.passwordHash())).isTrue();
 
-        // A regular user only sees the conversations it owns.
-        assertThat(ids(conversations.list("seed-user-alice", false).collectList().block()))
-                .containsExactlyInAnyOrder("seed-conv-alice-1", "seed-conv-alice-2");
-        assertThat(ids(conversations.list("seed-user-bob", false).collectList().block()))
-                .containsExactly("seed-conv-bob-1");
+        // Students are scoped to themselves; the counselor is scoped to the two classes it manages.
+        assertThat(scopeValues(student01.id(), "class_id")).containsExactly("1");
+        assertThat(scopeValues(student01.id(), "student_id")).containsExactly("1");
+        assertThat(scopeValues(student01.id(), "student_no")).containsExactly("2023001");
+        assertThat(scopeValues(student03.id(), "class_id")).containsExactly("2");
+        assertThat(scopeValues(counselor01.id(), "class_id")).containsExactlyInAnyOrder("1", "2");
+
+        // The datasource whitelist is seeded for the scoped roles only; admins need no row.
+        assertThat(datasourceAccess("student")).containsExactly("campus");
+        assertThat(datasourceAccess("counselor")).containsExactly("campus");
+        assertThat(datasourceAccess("admin")).isEmpty();
+
+        // A student only sees the conversations it owns.
+        assertThat(ids(conversations.list(student01.id(), false).collectList().block()))
+                .containsExactlyInAnyOrder("seed-conv-student01-1", "seed-conv-student01-2");
+        assertThat(ids(conversations.list(student02.id(), false).collectList().block()))
+                .containsExactly("seed-conv-student02-1");
 
         // An admin sees every seeded conversation, whoever owns it.
-        assertThat(ids(conversations.list("seed-user-admin", true).collectList().block()))
+        assertThat(ids(conversations.list(admin.id(), true).collectList().block()))
                 .contains(
-                        "seed-conv-alice-1",
-                        "seed-conv-alice-2",
-                        "seed-conv-bob-1",
+                        "seed-conv-student01-1",
+                        "seed-conv-student01-2",
+                        "seed-conv-student02-1",
+                        "seed-conv-counselor01-1",
                         "seed-conv-admin-1");
 
-        // The seeded exchange is readable by its owner.
+        // The seeded exchange is readable by its owner and references the campus dataset.
         assertThat(
                         conversations
-                                .messages("seed-conv-alice-1", "seed-user-alice", false)
+                                .messages("seed-conv-student01-1", student01.id(), false)
                                 .collectList()
                                 .block())
                 .hasSize(2);
     }
 
-    private static java.util.List<String> ids(java.util.List<Conversation> rows) {
+    private List<String> scopeValues(String userId, String scopeType) {
+        return client.sql(
+                        "SELECT scope_value FROM user_scope WHERE user_id = :userId AND scope_type = :scopeType")
+                .bind("userId", userId)
+                .bind("scopeType", scopeType)
+                .map((row, meta) -> row.get("scope_value", String.class))
+                .all()
+                .collectList()
+                .block();
+    }
+
+    private List<String> datasourceAccess(String role) {
+        return client.sql("SELECT datasource_id FROM datasource_access WHERE role = :role")
+                .bind("role", role)
+                .map((row, meta) -> row.get("datasource_id", String.class))
+                .all()
+                .collectList()
+                .block();
+    }
+
+    private static List<String> ids(List<Conversation> rows) {
         return rows.stream().map(Conversation::id).toList();
     }
 

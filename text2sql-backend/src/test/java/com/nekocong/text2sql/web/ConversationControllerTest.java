@@ -38,7 +38,7 @@ class ConversationControllerTest {
                         .uri("/api/conversations")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .bodyValue(Map.of("title", "Orders analysis", "datasourceId", "demo"))
+                        .bodyValue(Map.of("title", "Orders analysis", "datasourceId", "campus"))
                         .exchange()
                         .expectStatus()
                         .isCreated()

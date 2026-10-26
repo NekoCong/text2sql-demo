@@ -59,7 +59,7 @@ class ConversationRoleAccessTest {
                         .uri("/api/conversations")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .bodyValue(Map.of("title", "Scoped", "datasourceId", "demo"))
+                        .bodyValue(Map.of("title", "Scoped", "datasourceId", "campus"))
                         .exchange()
                         .expectStatus()
                         .isCreated()
@@ -153,7 +153,7 @@ class ConversationRoleAccessTest {
 
     @Test
     void registrationNeverGrantsAdmin() {
-        // TestAuth registers through the public endpoint, which must always yield a plain user.
+        // TestAuth registers through the public endpoint, which must always yield a plain student.
         client.get()
                 .uri("/api/auth/me")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + ownerToken)
@@ -162,6 +162,6 @@ class ConversationRoleAccessTest {
                 .isOk()
                 .expectBody()
                 .jsonPath("$.role")
-                .isEqualTo(Roles.USER);
+                .isEqualTo(Roles.STUDENT);
     }
 }
