@@ -79,7 +79,7 @@ class DatasourceAccessControllerTest {
                 .jsonPath("$.datasources[0].defaultDatasource")
                 .isEqualTo(true)
                 .jsonPath("$.datasources[0].grantedRoles")
-                .isArray();
+                .value(org.hamcrest.Matchers.hasItem("student"));
     }
 
     @Test

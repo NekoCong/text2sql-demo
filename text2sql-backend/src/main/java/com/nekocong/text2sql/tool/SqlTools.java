@@ -3,6 +3,7 @@ package com.nekocong.text2sql.tool;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nekocong.text2sql.datasource.DataSourceRegistry;
+import com.nekocong.text2sql.datasource.DatasourceAccessGuard;
 import com.nekocong.text2sql.nl2sql.ExecutionListener;
 import com.nekocong.text2sql.nl2sql.Text2SqlResult;
 import com.nekocong.text2sql.schema.SchemaIntrospector;
@@ -39,6 +40,7 @@ public class SqlTools {
     private final SchemaRenderer renderer;
     private final Text2SqlPipelineService pipeline;
     private final TablePolicy policy;
+    private final DatasourceAccessGuard datasourceGuard;
     private final ObjectMapper objectMapper;
 
     /**
@@ -49,6 +51,7 @@ public class SqlTools {
      * @param renderer the schema DDL renderer
      * @param pipeline the NL2SQL pipeline
      * @param policy the table policy used to trim metadata
+     * @param datasourceGuard the datasource whitelist guard
      * @param objectMapper the shared Jackson mapper
      */
     public SqlTools(
@@ -57,12 +60,14 @@ public class SqlTools {
             SchemaRenderer renderer,
             Text2SqlPipelineService pipeline,
             TablePolicy policy,
+            DatasourceAccessGuard datasourceGuard,
             ObjectMapper objectMapper) {
         this.registry = registry;
         this.introspector = introspector;
         this.renderer = renderer;
         this.pipeline = pipeline;
         this.policy = policy;
+        this.datasourceGuard = datasourceGuard;
         this.objectMapper = objectMapper;
     }
 
@@ -160,7 +165,8 @@ public class SqlTools {
     }
 
     private List<TableSchema> describeTables(String datasourceId, DataScope scope) {
-        return introspector.introspect(registry.resolve(datasourceId)).stream()
+        String resolved = datasourceGuard.resolve(scope, datasourceId);
+        return introspector.introspect(registry.resolve(resolved)).stream()
                 .filter(table -> policy.allows(scope, table.name()))
                 .toList();
     }

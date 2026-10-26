@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nekocong.text2sql.datasource.DataSourceRegistry;
+import com.nekocong.text2sql.datasource.DatasourceAccessGuard;
 import com.nekocong.text2sql.security.DataScope;
 import com.nekocong.text2sql.security.TablePolicy;
 import com.nekocong.text2sql.tool.SqlTools;
@@ -41,6 +42,9 @@ class SchemaTrimmingTest {
 
     @Autowired
     private SchemaRenderer renderer;
+
+    @Autowired
+    private DatasourceAccessGuard guard;
 
     @BeforeAll
     void createHiddenTable() throws Exception {
@@ -89,7 +93,7 @@ class SchemaTrimmingTest {
     }
 
     private SqlTools tools() {
-        return new SqlTools(registry, introspector, renderer, null, new TablePolicy(), new ObjectMapper());
+        return new SqlTools(registry, introspector, renderer, null, new TablePolicy(), guard, new ObjectMapper());
     }
 
     private void execute(String sql) throws Exception {

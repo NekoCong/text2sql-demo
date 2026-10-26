@@ -35,9 +35,11 @@ class Text2SqlControllerTest {
         insertScope(userId, "student_id", "1");
         insertScope(userId, "student_no", "2023001");
         db.sql(
-                        "INSERT INTO datasource_access (role, datasource_id) VALUES ('student', 'campus')")
+                        "DELETE FROM datasource_access WHERE role = 'student' AND datasource_id = 'campus'")
                 .then()
-                .onErrorResume(error -> reactor.core.publisher.Mono.empty())
+                .block();
+        db.sql("INSERT INTO datasource_access (role, datasource_id) VALUES ('student', 'campus')")
+                .then()
                 .block();
     }
 

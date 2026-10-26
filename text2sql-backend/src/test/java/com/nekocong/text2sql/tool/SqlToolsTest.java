@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nekocong.text2sql.datasource.DataSourceRegistry;
+import com.nekocong.text2sql.datasource.DatasourceAccessGuard;
 import com.nekocong.text2sql.nl2sql.ExecutionListener;
 import com.nekocong.text2sql.nl2sql.Text2SqlResult;
 import com.nekocong.text2sql.schema.SchemaIntrospector;
@@ -36,6 +37,9 @@ class SqlToolsTest {
     @Autowired
     private SchemaRenderer renderer;
 
+    @Autowired
+    private DatasourceAccessGuard guard;
+
     private SqlTools tools(AtomicReference<DataScope> captured) {
         Text2SqlPipelineService stub =
                 new Text2SqlPipelineService(null, null, null, null, null, null, null, null, null) {
@@ -56,7 +60,7 @@ class SqlToolsTest {
                     }
                 };
         return new SqlTools(
-                registry, introspector, renderer, stub, new TablePolicy(), new ObjectMapper());
+                registry, introspector, renderer, stub, new TablePolicy(), guard, new ObjectMapper());
     }
 
     @Test
@@ -101,11 +105,30 @@ class SqlToolsTest {
                 };
         SqlTools tools =
                 new SqlTools(
-                        registry, introspector, renderer, failing, new TablePolicy(), new ObjectMapper());
+                        registry, introspector, renderer, failing, new TablePolicy(), guard, new ObjectMapper());
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
                         () -> tools.queryDatabase("q", "campus", studentScope(), ExecutionListener.noop()))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void metadataToolsRespectTheDatasourceWhitelist() {
+        DataScope warehouseOnly =
+                new DataScope("u-1", "student", Set.of(1L), 1L, "2023001", Set.of("warehouse"));
+        DataScope noGrant = new DataScope("u-1", "student", Set.of(1L), 1L, "2023001", Set.of());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> tools(new AtomicReference<>()).listTables(null, warehouseOnly))
+                .isInstanceOf(com.nekocong.text2sql.security.SqlPermissionException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () ->
+                                tools(new AtomicReference<>())
+                                        .describeTable("student", "warehouse", warehouseOnly))
+                .isInstanceOf(com.nekocong.text2sql.security.SqlPermissionException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> tools(new AtomicReference<>()).listTables(null, noGrant))
+                .hasMessageContaining("没有任何可用的数据源");
     }
 
     private static DataScope studentScope() {

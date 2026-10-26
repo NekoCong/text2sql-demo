@@ -31,7 +31,8 @@ final class TestAuth {
     }
 
     /** Logs in and returns the access token. */
-    static String login(WebTestClient client, String username, String password) {        String body =
+    static String login(WebTestClient client, String username, String password) {
+        String body =
                 client.post()
                         .uri("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

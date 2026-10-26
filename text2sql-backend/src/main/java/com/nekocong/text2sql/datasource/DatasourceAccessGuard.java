@@ -46,18 +46,30 @@ public class DatasourceAccessGuard {
         if (allowed.isEmpty()) {
             throw new SqlPermissionException("当前角色没有任何可用的数据源");
         }
+
+        Set<String> known =
+                registry.definitions().stream()
+                        .map(DataSourceDefinition::getId)
+                        .filter(allowed::contains)
+                        .collect(java.util.stream.Collectors.toSet());
+        if (known.isEmpty()) {
+            throw new SqlPermissionException("当前角色授权的数据源均不可用");
+        }
+
         if (requestedId != null && !requestedId.isBlank()) {
             if (!allowed.contains(requestedId)) {
                 throw new SqlPermissionException("数据源 " + requestedId + " 未授权");
             }
-            registry.definition(requestedId);
+            if (!known.contains(requestedId)) {
+                throw new SqlPermissionException("数据源 " + requestedId + " 已不可用");
+            }
             return requestedId;
         }
 
         String defaultId = registry.defaultId();
-        if (defaultId != null && allowed.contains(defaultId)) {
+        if (defaultId != null && known.contains(defaultId)) {
             return defaultId;
         }
-        return allowed.stream().sorted().findFirst().orElseThrow();
+        return known.stream().sorted().findFirst().orElseThrow();
     }
 }
