@@ -35,7 +35,8 @@ class DataScopeRewriterTest {
         String sql = rewriter.rewrite("SELECT student_no FROM student", student());
 
         assertThat(sql).containsIgnoringCase("student_no IN ('2023001')");
-        assertThat(sql).containsIgnoringCase("AS student");
+        assertThat(compact(sql)).contains(") as student");
+        assertThat(compact(sql)).doesNotContain("_sp2");
     }
 
     @Test
@@ -111,6 +112,67 @@ class DataScopeRewriterTest {
     }
 
     @Test
+    void filtersExistsSubqueries() {
+        String sql =
+                rewriter.rewrite(
+                        "SELECT name FROM student WHERE EXISTS (SELECT 1 FROM score)", student());
+
+        assertThat(compact(sql)).contains("student_id in (1)");
+        assertThat(compact(sql)).contains("student_no in ('2023001')");
+    }
+
+    @Test
+    void rejectsWhitelistedTablesInsideExistsSubqueries() {
+        assertThatThrownBy(
+                        () ->
+                                rewriter.rewrite(
+                                        "SELECT name FROM student WHERE EXISTS (SELECT 1 FROM salary)",
+                                        student()))
+                .isInstanceOf(SqlPermissionException.class)
+                .hasMessageContaining("salary");
+    }
+
+    @Test
+    void filtersOrderBySubqueriesOfSetOperations() {
+        String sql =
+                rewriter.rewrite(
+                        "SELECT student_no FROM student UNION SELECT student_no FROM student "
+                                + "ORDER BY (SELECT MAX(score) FROM score)",
+                        student());
+
+        assertThat(compact(sql)).contains("student_id in (1)");
+    }
+
+    @Test
+    void rejectsWhitelistedTablesInsideSetOperationOrderBy() {
+        assertThatThrownBy(
+                        () ->
+                                rewriter.rewrite(
+                                        "SELECT student_no FROM student UNION SELECT student_no FROM student "
+                                                + "ORDER BY (SELECT score FROM salary)",
+                                        student()))
+                .isInstanceOf(SqlPermissionException.class)
+                .hasMessageContaining("salary");
+    }
+
+    @Test
+    void rejectsSelectInto() {
+        assertThatThrownBy(() -> rewriter.rewrite("SELECT * FROM student INTO backup", student()))
+                .isInstanceOf(SqlPermissionException.class);
+    }
+
+    @Test
+    void rewritesNestedCteBodiesOnce() {
+        String sql =
+                rewriter.rewrite(
+                        "WITH a AS (WITH b AS (SELECT * FROM score) SELECT * FROM b) SELECT * FROM a",
+                        student());
+
+        assertThat(countOccurrences(compact(sql), "student_id in (1)")).isEqualTo(1);
+        assertThat(compact(sql)).doesNotContain("as b").doesNotContain("as a");
+    }
+
+    @Test
     void givesRepeatedTableReferencesDistinctAliases() {
         String sql = rewriter.rewrite("SELECT 1 FROM student, student", student());
 
@@ -121,7 +183,8 @@ class DataScopeRewriterTest {
         return sql.toLowerCase().replaceAll("\\s+", " ").replaceAll(",\\s*", ",");
     }
 
-    private static int countOccurrences(String text, String needle) {        int count = 0;
+    private static int countOccurrences(String text, String needle) {
+        int count = 0;
         int index = 0;
         String lowerText = text.toLowerCase();
         String lowerNeedle = needle.toLowerCase();

@@ -79,12 +79,12 @@ public class DataScopeRewriter {
         }
         try {
             rewriteSelect(select, scope, new HashSet<>());
+            return select.toString();
         } catch (SqlPermissionException ex) {
             throw ex;
         } catch (RuntimeException ex) {
             throw new SqlPermissionException("无法应用数据权限，已拒绝执行", ex);
         }
-        return select.toString();
     }
 
     private void rewriteSelect(Select select, DataScope scope, Set<String> inheritedCtes) {
@@ -107,14 +107,19 @@ public class DataScopeRewriter {
             for (Select branch : setOperation.getSelects()) {
                 rewriteSelect(branch, scope, ctes);
             }
+            rewriteOrderBy(setOperation.getOrderByElements(), scope, ctes);
         } else if (select instanceof ParenthesedSelect parenthesed) {
             rewriteSelect(parenthesed.getSelect(), scope, ctes);
+            rewriteOrderBy(parenthesed.getOrderByElements(), scope, ctes);
         } else if (!(select instanceof Values)) {
             throw new SqlPermissionException("不支持该查询结构，无法应用数据权限");
         }
     }
 
     private void rewritePlainSelect(PlainSelect select, DataScope scope, Set<String> ctes) {
+        if (select.getIntoTables() != null && !select.getIntoTables().isEmpty()) {
+            throw new SqlPermissionException("不支持 SELECT ... INTO，已拒绝执行");
+        }
         Set<String> aliases = new HashSet<>();
         select.setFromItem(rewriteFromItem(select.getFromItem(), scope, ctes, aliases));
 
@@ -138,10 +143,16 @@ public class DataScopeRewriter {
         if (select.getGroupBy() != null) {
             rewriteExpression(select.getGroupBy().getGroupByExpressionList(), scope, ctes);
         }
-        if (select.getOrderByElements() != null) {
-            for (OrderByElement order : select.getOrderByElements()) {
-                rewriteExpression(order.getExpression(), scope, ctes);
-            }
+        rewriteOrderBy(select.getOrderByElements(), scope, ctes);
+    }
+
+    private void rewriteOrderBy(
+            List<OrderByElement> orderByElements, DataScope scope, Set<String> ctes) {
+        if (orderByElements == null) {
+            return;
+        }
+        for (OrderByElement order : orderByElements) {
+            rewriteExpression(order.getExpression(), scope, ctes);
         }
     }
 
@@ -162,6 +173,11 @@ public class DataScopeRewriter {
             if (parenthesed.getJoins() != null) {
                 for (Join join : parenthesed.getJoins()) {
                     join.setRightItem(rewriteFromItem(join.getRightItem(), scope, ctes, aliases));
+                    if (join.getOnExpressions() != null) {
+                        for (Expression on : join.getOnExpressions()) {
+                            rewriteExpression(on, scope, ctes);
+                        }
+                    }
                 }
             }
             return item;
@@ -178,7 +194,10 @@ public class DataScopeRewriter {
         policy.requireAllowed(scope, name);
 
         String declaredAlias =
-                table.getAlias() != null ? table.getAlias().getName() : table.getName();
+                table.getAlias() != null ? table.getAlias().getName() : name;
+        if (declaredAlias == null || declaredAlias.isBlank()) {
+            declaredAlias = "t";
+        }
         Optional<String> filter = policy.filterFor(scope, name);
         if (filter.isEmpty()) {
             register(declaredAlias, aliases);
