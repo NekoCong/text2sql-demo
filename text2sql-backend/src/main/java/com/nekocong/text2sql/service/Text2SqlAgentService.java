@@ -2,14 +2,18 @@ package com.nekocong.text2sql.service;
 
 import com.nekocong.text2sql.config.HarnessAgentFactory;
 import com.nekocong.text2sql.modelconfig.ModelResolver;
+import com.nekocong.text2sql.nl2sql.ExecutionListener;
 import com.nekocong.text2sql.security.DataScope;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEvent;
+import io.agentscope.core.event.CustomEvent;
 import io.agentscope.core.event.TextBlockDeltaEvent;
 import io.agentscope.core.message.UserMessage;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
 /**
@@ -53,17 +57,57 @@ public class Text2SqlAgentService {
                         model ->
                                 Flux.defer(
                                         () -> {
+                                            Sinks.Many<AgentEvent> side =
+                                                    Sinks.many().unicast().onBackpressureBuffer();
+                                            ExecutionListener listener = sideChannel(side);
                                             RuntimeContext ctx =
                                                     RuntimeContext.builder()
                                                             .sessionId(sessionId)
                                                             .userId(scope.userId())
                                                             .build();
-                                            // Tools declare a DataScope parameter; AgentScope resolves it
-                                            // from this context instead of the model-facing input.
+                                            // Tools declare DataScope / ExecutionListener parameters;
+                                            // AgentScope resolves them from this context instead of
+                                            // the model-facing input.
                                             ctx.put(DataScope.class, scope);
-                                            return agentFactory.create(model).streamEvents(new UserMessage(message), ctx);
+                                            ctx.put(ExecutionListener.class, listener);
+                                            Flux<AgentEvent> agent =
+                                                    agentFactory
+                                                            .create(model)
+                                                            .streamEvents(new UserMessage(message), ctx)
+                                                            .doFinally(signal -> side.tryEmitComplete());
+                                            return Flux.merge(agent, side.asFlux());
                                         }))
                 .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Turns pipeline callbacks into custom agent events, so the web layer can show the enforced SQL
+     * without parsing tool output.
+     */
+    private static ExecutionListener sideChannel(Sinks.Many<AgentEvent> side) {
+        return new ExecutionListener() {
+            @Override
+            public void onSuccess(String datasourceId, String sql, int rowCount) {
+                side.tryEmitNext(
+                        new CustomEvent(
+                                "sql",
+                                Map.of(
+                                        "datasourceId", datasourceId == null ? "" : datasourceId,
+                                        "sql", sql,
+                                        "rowCount", rowCount,
+                                        "scopeApplied", true)));
+            }
+
+            @Override
+            public void onFailure(String datasourceId, String message) {
+                side.tryEmitNext(
+                        new CustomEvent(
+                                "error",
+                                Map.of(
+                                        "datasourceId", datasourceId == null ? "" : datasourceId,
+                                        "message", message == null ? "" : message)));
+            }
+        };
     }
 
     /**

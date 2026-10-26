@@ -47,6 +47,7 @@ public class Text2SqlController {
     private final Text2SqlAgentService agentService;
     private final ConversationService conversations;
     private final DataScopeResolver scopes;
+    private final AgentEventPresenter presenter;
     private final ObjectMapper objectMapper;
 
     /**
@@ -56,6 +57,7 @@ public class Text2SqlController {
      * @param agentService the AgentScope chat agent service
      * @param conversations the conversation service (persistence)
      * @param scopes resolves the caller's data scope
+     * @param presenter maps agent events onto SSE events
      * @param objectMapper the shared Jackson mapper
      */
     public Text2SqlController(
@@ -63,11 +65,13 @@ public class Text2SqlController {
             Text2SqlAgentService agentService,
             ConversationService conversations,
             DataScopeResolver scopes,
+            AgentEventPresenter presenter,
             ObjectMapper objectMapper) {
         this.pipeline = pipeline;
         this.agentService = agentService;
         this.conversations = conversations;
         this.scopes = scopes;
+        this.presenter = presenter;
         this.objectMapper = objectMapper;
     }
 
@@ -168,8 +172,7 @@ public class Text2SqlController {
                         scope ->
                                 agentService
                                         .stream(message, scopedSessionId, scope)
-                                        .filter(event -> event instanceof TextBlockDeltaEvent)
-                                        .map(event -> sse("delta", ((TextBlockDeltaEvent) event).getDelta())))
+                                        .flatMap(event -> Mono.justOrEmpty(presenter.present(event))))
                 .concatWith(Mono.just(sse("done", "[DONE]")))
                 .onErrorResume(ex -> Flux.just(sse("error", errorMessage(ex))));
     }

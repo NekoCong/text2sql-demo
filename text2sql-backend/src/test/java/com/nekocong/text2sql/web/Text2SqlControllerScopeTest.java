@@ -56,7 +56,8 @@ class Text2SqlControllerScopeTest {
                                         null));
                     }
                 };
-        return new Text2SqlController(stub, null, conversations, resolver, new ObjectMapper());
+        return new Text2SqlController(
+                        stub, null, conversations, resolver, null, new ObjectMapper());
     }
 
     @Test

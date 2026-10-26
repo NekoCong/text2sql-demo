@@ -3,6 +3,7 @@ package com.nekocong.text2sql.tool;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nekocong.text2sql.datasource.DataSourceRegistry;
+import com.nekocong.text2sql.nl2sql.ExecutionListener;
 import com.nekocong.text2sql.nl2sql.Text2SqlResult;
 import com.nekocong.text2sql.schema.SchemaIntrospector;
 import com.nekocong.text2sql.schema.SchemaRenderer;
@@ -148,8 +149,16 @@ public class SqlTools {
                             description = "Datasource id; omit for the default datasource",
                             required = false)
                     String datasourceId,
-            DataScope scope) {
-        Text2SqlResult result = pipeline.runBlocking(scope, datasourceId, question);
+            DataScope scope,
+            ExecutionListener listener) {
+        Text2SqlResult result;
+        try {
+            result = pipeline.runBlocking(scope, datasourceId, question, listener);
+        } catch (RuntimeException ex) {
+            String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+            listener.onFailure(datasourceId, message);
+            throw ex;
+        }
         try {
             return objectMapper.writeValueAsString(result);
         } catch (JsonProcessingException ex) {

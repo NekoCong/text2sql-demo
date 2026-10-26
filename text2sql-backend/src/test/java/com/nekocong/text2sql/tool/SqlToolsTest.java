@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nekocong.text2sql.datasource.DataSourceRegistry;
+import com.nekocong.text2sql.nl2sql.ExecutionListener;
 import com.nekocong.text2sql.nl2sql.Text2SqlResult;
 import com.nekocong.text2sql.schema.SchemaIntrospector;
 import com.nekocong.text2sql.schema.SchemaRenderer;
@@ -40,7 +41,10 @@ class SqlToolsTest {
                 new Text2SqlPipelineService(null, null, null, null, null, null, null, null) {
                     @Override
                     public Text2SqlResult runBlocking(
-                            DataScope scope, String datasourceId, String question) {
+                            DataScope scope,
+                            String datasourceId,
+                            String question,
+                            ExecutionListener listener) {
                         captured.set(scope);
                         return new Text2SqlResult(
                                 datasourceId,
@@ -60,7 +64,7 @@ class SqlToolsTest {
         AtomicReference<DataScope> captured = new AtomicReference<>();
         DataScope scope = studentScope();
 
-        String json = tools(captured).queryDatabase("我的成绩", null, scope);
+        String json = tools(captured).queryDatabase("我的成绩", null, scope, ExecutionListener.noop());
 
         assertThat(captured.get()).isSameAs(scope);
         assertThat(json).contains("\"sql\":\"SELECT 1\"");
@@ -80,6 +84,45 @@ class SqlToolsTest {
         String answer = tools(new AtomicReference<>()).describeTable("salary", null, studentScope());
 
         assertThat(answer).contains("Unknown table 'salary'");
+    }
+
+    @Test
+    void failedQueryIsReportedToTheListener() {
+        Text2SqlPipelineService failing =
+                new Text2SqlPipelineService(null, null, null, null, null, null, null, null) {
+                    @Override
+                    public Text2SqlResult runBlocking(
+                            DataScope scope,
+                            String datasourceId,
+                            String question,
+                            ExecutionListener listener) {
+                        throw new IllegalStateException("denied for test");
+                    }
+                };
+        SqlTools tools =
+                new SqlTools(
+                        registry, introspector, renderer, failing, new TablePolicy(), new ObjectMapper());
+        AtomicReference<String> failure = new AtomicReference<>();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () ->
+                                tools.queryDatabase(
+                                        "q",
+                                        "campus",
+                                        studentScope(),
+                                        new ExecutionListener() {
+                                            @Override
+                                            public void onSuccess(String ds, String sql, int rows) {
+                                                // not expected
+                                            }
+
+                                            @Override
+                                            public void onFailure(String ds, String message) {
+                                                failure.set(message);
+                                            }
+                                        }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(failure.get()).isEqualTo("denied for test");
     }
 
     private static DataScope studentScope() {

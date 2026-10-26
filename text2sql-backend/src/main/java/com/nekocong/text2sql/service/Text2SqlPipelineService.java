@@ -4,6 +4,7 @@ import com.nekocong.text2sql.datasource.DataSourceRegistry;
 import com.nekocong.text2sql.gbi.ChartInference;
 import com.nekocong.text2sql.modelconfig.ModelResolver;
 import com.nekocong.text2sql.nl2sql.ChartEvent;
+import com.nekocong.text2sql.nl2sql.ExecutionListener;
 import com.nekocong.text2sql.nl2sql.RowsEvent;
 import com.nekocong.text2sql.nl2sql.SqlEvent;
 import com.nekocong.text2sql.nl2sql.SqlGeneration;
@@ -82,11 +83,25 @@ public class Text2SqlPipelineService {
      * @return a mono emitting the result
      */
     public Mono<Text2SqlResult> run(DataScope scope, String datasourceId, String question) {
+        return run(scope, datasourceId, question, ExecutionListener.noop());
+    }
+
+    /**
+     * Runs the pipeline and returns the complete result, notifying an execution listener.
+     *
+     * @param scope the caller's data scope
+     * @param datasourceId the datasource id (or {@code null} for the default)
+     * @param question the natural-language question
+     * @param listener notified with the enforced SQL / failure reason
+     * @return a mono emitting the result
+     */
+    public Mono<Text2SqlResult> run(
+            DataScope scope, String datasourceId, String question, ExecutionListener listener) {
         String id = resolveId(datasourceId);
         String dialect = dialectOf(id);
         return Mono.zip(schema(id, scope, question), modelResolver.resolve(scope.userId()))
                 .flatMap(pair -> generationService.generate(pair.getT2(), dialect, pair.getT1(), question))
-                .flatMap(generation -> execute(id, dialect, generation, scope));
+                .flatMap(generation -> execute(id, dialect, generation, scope, listener));
     }
 
     /**
@@ -103,6 +118,20 @@ public class Text2SqlPipelineService {
     }
 
     /**
+     * Runs the pipeline and blocks, notifying an execution listener.
+     *
+     * @param scope the caller's data scope
+     * @param datasourceId the datasource id (or {@code null} for the default)
+     * @param question the natural-language question
+     * @param listener notified with the enforced SQL / failure reason
+     * @return the result
+     */
+    public Text2SqlResult runBlocking(
+            DataScope scope, String datasourceId, String question, ExecutionListener listener) {
+        return run(scope, datasourceId, question, listener).block();
+    }
+
+    /**
      * Runs the pipeline as a stream of progress + result events.
      *
      * @param scope the caller's data scope
@@ -111,6 +140,20 @@ public class Text2SqlPipelineService {
      * @return a flux of pipeline events
      */
     public Flux<Text2SqlEvent> stream(DataScope scope, String datasourceId, String question) {
+        return stream(scope, datasourceId, question, ExecutionListener.noop());
+    }
+
+    /**
+     * Runs the pipeline as a stream, notifying an execution listener with the enforced SQL.
+     *
+     * @param scope the caller's data scope
+     * @param datasourceId the datasource id (or {@code null} for the default)
+     * @param question the natural-language question
+     * @param listener notified with the enforced SQL / failure reason
+     * @return a flux of pipeline events
+     */
+    public Flux<Text2SqlEvent> stream(
+            DataScope scope, String datasourceId, String question, ExecutionListener listener) {
         String id = resolveId(datasourceId);
         String dialect = dialectOf(id);
         return Flux.concat(
@@ -122,17 +165,23 @@ public class Text2SqlPipelineService {
                                                 Flux.just(new StepEvent("generate", "调用模型生成 SQL")),
                                                 generationService
                                                         .generate(pair.getT2(), dialect, pair.getT1(), question)
-                                                        .flatMapMany(gen -> toEvents(id, dialect, gen, scope)))));
+                                                        .flatMapMany(gen -> toEvents(id, dialect, gen, scope, listener)))));
     }
 
     private Flux<Text2SqlEvent> toEvents(
-            String id, String dialect, SqlGeneration generation, DataScope scope) {
+            String id,
+            String dialect,
+            SqlGeneration generation,
+            DataScope scope,
+            ExecutionListener listener) {
         String safeSql = enforce(generation.sql(), scope);
         return Flux.concat(
                 Flux.just(new SqlEvent(id, dialect, safeSql, generation.explanation())),
                 Flux.just(new StepEvent("execute", "执行只读查询")),
                 sqlExecutor
                         .execute(id, safeSql)
+                        .doOnNext(rows -> listener.onSuccess(id, safeSql, rows.rowCount()))
+                        .doOnError(error -> listener.onFailure(id, errorMessage(error)))
                         .flatMapMany(
                                 rows ->
                                         Flux.just(
@@ -140,14 +189,25 @@ public class Text2SqlPipelineService {
     }
 
     private Mono<Text2SqlResult> execute(
-            String id, String dialect, SqlGeneration generation, DataScope scope) {
+            String id,
+            String dialect,
+            SqlGeneration generation,
+            DataScope scope,
+            ExecutionListener listener) {
         String safeSql = enforce(generation.sql(), scope);
         return sqlExecutor
                 .execute(id, safeSql)
+                .doOnNext(rows -> listener.onSuccess(id, safeSql, rows.rowCount()))
+                .doOnError(error -> listener.onFailure(id, errorMessage(error)))
                 .map(
                         result ->
                                 new Text2SqlResult(
                                         id, dialect, safeSql, generation.explanation(), result, chartInference.infer(result)));
+    }
+
+    private static String errorMessage(Throwable error) {
+        String message = error.getMessage();
+        return (message == null || message.isBlank()) ? error.getClass().getSimpleName() : message;
     }
 
     /**
