@@ -6,6 +6,8 @@ import com.nekocong.text2sql.datasource.DataSourceRegistry;
 import com.nekocong.text2sql.schema.model.ColumnSchema;
 import com.nekocong.text2sql.schema.model.ForeignKeySchema;
 import com.nekocong.text2sql.schema.model.TableSchema;
+import com.nekocong.text2sql.security.DataScope;
+import com.nekocong.text2sql.security.TablePolicy;
 import io.agentscope.core.embedding.EmbeddingModel;
 import io.agentscope.core.message.TextBlock;
 import java.util.ArrayList;
@@ -41,6 +43,7 @@ public class RagSchemaProvider implements SchemaProvider {
     private final SchemaRenderer renderer;
     private final RagProperties ragProperties;
     private final Nl2SqlProperties nl2SqlProperties;
+    private final TablePolicy policy;
     private final Map<String, List<IndexedTable>> indexCache = new ConcurrentHashMap<>();
 
     /**
@@ -52,6 +55,7 @@ public class RagSchemaProvider implements SchemaProvider {
      * @param renderer the DDL renderer
      * @param ragProperties the RAG configuration
      * @param nl2SqlProperties the pipeline limits (used for the render budget)
+     * @param policy the table policy used to hide out-of-scope tables
      */
     public RagSchemaProvider(
             EmbeddingModel embeddingModel,
@@ -59,19 +63,25 @@ public class RagSchemaProvider implements SchemaProvider {
             SchemaIntrospector introspector,
             SchemaRenderer renderer,
             RagProperties ragProperties,
-            Nl2SqlProperties nl2SqlProperties) {
+            Nl2SqlProperties nl2SqlProperties,
+            TablePolicy policy) {
         this.embeddingModel = embeddingModel;
         this.registry = registry;
         this.introspector = introspector;
         this.renderer = renderer;
         this.ragProperties = ragProperties;
         this.nl2SqlProperties = nl2SqlProperties;
+        this.policy = policy;
     }
 
     @Override
-    public String renderForPrompt(String datasourceId, String question) {
+    public String renderForPrompt(String datasourceId, DataScope scope, String question) {
         DataSource dataSource = registry.resolve(datasourceId);
-        List<TableSchema> tables = introspector.introspect(dataSource);
+        java.util.Set<String> allowed = policy.tablesFor(scope.role());
+        List<TableSchema> tables =
+                introspector.introspect(dataSource).stream()
+                        .filter(table -> allowed.contains(table.name().toLowerCase(java.util.Locale.ROOT)))
+                        .toList();
         if (tables.isEmpty()) {
             return "";
         }

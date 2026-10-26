@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.nekocong.text2sql.config.Nl2SqlProperties;
 import com.nekocong.text2sql.config.RagProperties;
 import com.nekocong.text2sql.datasource.DataSourceRegistry;
+import com.nekocong.text2sql.security.DataScope;
+import com.nekocong.text2sql.security.TablePolicy;
 import io.agentscope.core.embedding.EmbeddingModel;
 import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.TextBlock;
@@ -61,6 +63,10 @@ class RagSchemaProviderTest {
         }
     }
 
+    private static DataScope adminScope() {
+        return DataScope.admin("tester");
+    }
+
     private RagSchemaProvider provider() {
         RagProperties rag = new RagProperties();
         rag.setTopK(1);
@@ -68,12 +74,12 @@ class RagSchemaProviderTest {
         Nl2SqlProperties nl2Sql = new Nl2SqlProperties();
         nl2Sql.setSchemaCharBudget(100000);
         return new RagSchemaProvider(
-                new TableTokenEmbedding(), registry, introspector, renderer, rag, nl2Sql);
+                new TableTokenEmbedding(), registry, introspector, renderer, rag, nl2Sql, new TablePolicy());
     }
 
     @Test
     void selectsRelevantTableAndExpandsForeignKeyNeighbours() {
-        String ddl = provider().renderForPrompt(null, "attendance records");
+        String ddl = provider().renderForPrompt(null, adminScope(), "attendance records");
 
         // 'attendance' is the top match; its FK neighbours (student, course) are pulled in...
         assertThat(ddl).containsIgnoringCase("CREATE TABLE attendance");
@@ -106,9 +112,9 @@ class RagSchemaProviderTest {
         Nl2SqlProperties nl2Sql = new Nl2SqlProperties();
         nl2Sql.setSchemaCharBudget(100000);
         RagSchemaProvider provider =
-                new RagSchemaProvider(broken, registry, introspector, renderer, rag, nl2Sql);
+                new RagSchemaProvider(broken, registry, introspector, renderer, rag, nl2Sql, new TablePolicy());
 
-        String ddl = provider.renderForPrompt(null, "anything");
+        String ddl = provider.renderForPrompt(null, adminScope(), "anything");
 
         assertThat(ddl).containsIgnoringCase("CREATE TABLE student");
         assertThat(ddl).containsIgnoringCase("CREATE TABLE attendance");

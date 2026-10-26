@@ -19,6 +19,9 @@ import com.nekocong.text2sql.nl2sql.Text2SqlEvent;
 import com.nekocong.text2sql.nl2sql.Text2SqlResult;
 import com.nekocong.text2sql.prompt.PromptCatalog;
 import com.nekocong.text2sql.schema.FullSchemaProvider;
+import com.nekocong.text2sql.security.DataScope;
+import com.nekocong.text2sql.security.TablePolicy;
+import com.nekocong.text2sql.sql.DataScopeRewriter;
 import com.nekocong.text2sql.sql.SqlExecutionException;
 import com.nekocong.text2sql.sql.SqlExecutor;
 import com.nekocong.text2sql.sql.SqlSafetyException;
@@ -29,6 +32,7 @@ import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.model.ToolSchema;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -36,8 +40,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
- * Exercises the full deterministic pipeline (schema → generate → validate → execute → chart) with a
- * stubbed model + resolver, so orchestration is verified without an LLM.
+ * Exercises the full deterministic pipeline (schema → generate → validate → permission rewrite →
+ * execute → chart) with a stubbed model + resolver, so orchestration is verified without an LLM.
  */
 @SpringBootTest
 class Text2SqlPipelineServiceTest {
@@ -86,18 +90,26 @@ class Text2SqlPipelineServiceTest {
                     }
                 };
         return new Text2SqlPipelineService(
-                registry, schemaProvider, resolver, stub, safetyValidator, sqlExecutor, new ChartInference());
+                registry,
+                schemaProvider,
+                resolver,
+                stub,
+                safetyValidator,
+                new DataScopeRewriter(new TablePolicy()),
+                sqlExecutor,
+                new ChartInference());
     }
 
     @Test
-    void runsEndToEndWithStubbedModel() {
+    void runsEndToEndAndExecutesTheEnforcedSql() {
         Text2SqlPipelineService pipeline =
                 pipelineReturning("SELECT COUNT(*) AS student_count FROM student", "counts all students");
 
-        Text2SqlResult result = pipeline.run("1", null, "how many students are there?").block();
+        Text2SqlResult result =
+                pipeline.run(studentScope(), null, "how many students are there?").block();
 
         assertThat(result.datasourceId()).isEqualTo("campus");
-        assertThat(result.sql()).isEqualTo("SELECT COUNT(*) AS student_count FROM student");
+        assertThat(result.sql()).containsIgnoringCase("student_no IN ('2023001')");
         assertThat(result.result().rowCount()).isEqualTo(1);
         assertThat(result.result().columns()).anyMatch(c -> c.name().equalsIgnoreCase("student_count"));
     }
@@ -106,15 +118,15 @@ class Text2SqlPipelineServiceTest {
     void rejectsUnsafeGeneratedSqlBeforeExecution() {
         Text2SqlPipelineService pipeline = pipelineReturning("DROP TABLE student", null);
 
-        assertThatThrownBy(() -> pipeline.run("1", null, "drop student").block())
+        assertThatThrownBy(() -> pipeline.run(studentScope(), null, "drop student").block())
                 .isInstanceOf(SqlSafetyException.class);
     }
 
     @Test
     void surfacesExecutionErrors() {
-        Text2SqlPipelineService pipeline = pipelineReturning("SELECT * FROM does_not_exist", null);
+        Text2SqlPipelineService pipeline = pipelineReturning("SELECT missing_column FROM student", null);
 
-        assertThatThrownBy(() -> pipeline.run("1", null, "bad query").block())
+        assertThatThrownBy(() -> pipeline.run(studentScope(), null, "bad query").block())
                 .isInstanceOf(SqlExecutionException.class);
     }
 
@@ -123,11 +135,18 @@ class Text2SqlPipelineServiceTest {
         Text2SqlPipelineService pipeline =
                 pipelineReturning("SELECT id FROM student ORDER BY id", "lists student ids");
 
-        List<Text2SqlEvent> events = pipeline.stream("1", null, "list student ids").collectList().block();
+        List<Text2SqlEvent> events =
+                pipeline.stream(studentScope(), null, "list student ids").collectList().block();
 
         assertThat(events).isNotNull();
         assertThat(events.get(0)).isInstanceOf(StepEvent.class);
-        assertThat(events).anySatisfy(e -> assertThat(e).isInstanceOf(SqlEvent.class));
+        assertThat(events)
+                .anySatisfy(
+                        event -> {
+                            assertThat(event).isInstanceOf(SqlEvent.class);
+                            assertThat(((SqlEvent) event).sql())
+                                    .containsIgnoringCase("student_no IN ('2023001')");
+                        });
 
         int rowsIndex = indexOf(events, RowsEvent.class);
         int chartIndex = indexOf(events, ChartEvent.class);
@@ -135,7 +154,11 @@ class Text2SqlPipelineServiceTest {
         assertThat(chartIndex).isGreaterThan(rowsIndex);
 
         RowsEvent rows = (RowsEvent) events.get(rowsIndex);
-        assertThat(rows.result().rowCount()).isPositive();
+        assertThat(rows.result().rowCount()).isEqualTo(1);
+    }
+
+    private static DataScope studentScope() {
+        return new DataScope("u-student", "student", Set.of(1L), 1L, "2023001", Set.of("campus"));
     }
 
     private static int indexOf(List<Text2SqlEvent> events, Class<? extends Text2SqlEvent> type) {

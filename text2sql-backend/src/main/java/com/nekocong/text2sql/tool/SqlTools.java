@@ -7,20 +7,28 @@ import com.nekocong.text2sql.nl2sql.Text2SqlResult;
 import com.nekocong.text2sql.schema.SchemaIntrospector;
 import com.nekocong.text2sql.schema.SchemaRenderer;
 import com.nekocong.text2sql.schema.model.TableSchema;
+import com.nekocong.text2sql.security.DataScope;
+import com.nekocong.text2sql.security.TablePolicy;
 import com.nekocong.text2sql.service.Text2SqlPipelineService;
 import io.agentscope.core.tool.Tool;
 import io.agentscope.core.tool.ToolParam;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /**
  * AgentScope tools that expose the NL2SQL pipeline to the chat agent.
  *
- * <p>Deliberately high-level: the agent is given one authoritative
- * {@code query_database} capability (which internally does schema grounding → generation →
- * validation → execution) plus light read-only exploration helpers, rather than the raw
- * list/describe/execute ladder that invites multi-hop, failure-prone loops.
+ * <p>Deliberately high-level: the agent is given one authoritative {@code query_database} capability
+ * (which internally does schema grounding → generation → validation → permission rewrite →
+ * execution) plus light read-only exploration helpers, rather than the raw list/describe/execute
+ * ladder that invites multi-hop, failure-prone loops.
+ *
+ * <p>Every method takes a {@link DataScope} parameter that is <em>not</em> annotated with {@code
+ * @ToolParam}: AgentScope treats such parameters as context and injects them from the runtime
+ * context, so the model can never supply or influence the caller's identity.
  *
  * <p>All tools run on AgentScope's tool-worker threads, so the blocking pipeline call is safe here.
  */
@@ -31,6 +39,7 @@ public class SqlTools {
     private final SchemaIntrospector introspector;
     private final SchemaRenderer renderer;
     private final Text2SqlPipelineService pipeline;
+    private final TablePolicy policy;
     private final ObjectMapper objectMapper;
 
     /**
@@ -40,6 +49,7 @@ public class SqlTools {
      * @param introspector the schema introspector
      * @param renderer the schema DDL renderer
      * @param pipeline the NL2SQL pipeline
+     * @param policy the table policy used to trim metadata
      * @param objectMapper the shared Jackson mapper
      */
     public SqlTools(
@@ -47,18 +57,21 @@ public class SqlTools {
             SchemaIntrospector introspector,
             SchemaRenderer renderer,
             Text2SqlPipelineService pipeline,
+            TablePolicy policy,
             ObjectMapper objectMapper) {
         this.registry = registry;
         this.introspector = introspector;
         this.renderer = renderer;
         this.pipeline = pipeline;
+        this.policy = policy;
         this.objectMapper = objectMapper;
     }
 
     /**
-     * Lists the tables of a datasource.
+     * Lists the tables of a datasource, restricted to the caller's scope.
      *
      * @param datasourceId datasource id (omit for the default)
+     * @param scope the caller's data scope (injected, never model-supplied)
      * @return a comma-separated table list
      */
     @Tool(
@@ -71,17 +84,19 @@ public class SqlTools {
                             name = "datasource_id",
                             description = "Datasource id; omit for the default datasource",
                             required = false)
-                    String datasourceId) {
-        return describeTables(datasourceId).stream()
+                    String datasourceId,
+            DataScope scope) {
+        return describeTables(datasourceId, scope).stream()
                 .map(TableSchema::name)
                 .collect(Collectors.joining(", "));
     }
 
     /**
-     * Shows the DDL of a single table.
+     * Shows the DDL of a single table, if it is inside the caller's scope.
      *
      * @param table the table name
      * @param datasourceId datasource id (omit for the default)
+     * @param scope the caller's data scope (injected, never model-supplied)
      * @return the table DDL, or an error message listing available tables
      */
     @Tool(
@@ -95,8 +110,9 @@ public class SqlTools {
                             name = "datasource_id",
                             description = "Datasource id; omit for the default datasource",
                             required = false)
-                    String datasourceId) {
-        List<TableSchema> tables = describeTables(datasourceId);
+                    String datasourceId,
+            DataScope scope) {
+        List<TableSchema> tables = describeTables(datasourceId, scope);
         return tables.stream()
                 .filter(candidate -> candidate.name().equalsIgnoreCase(table))
                 .findFirst()
@@ -110,10 +126,12 @@ public class SqlTools {
     }
 
     /**
-     * Answers a data question by generating and running a read-only SQL query.
+     * Answers a data question by generating and running a read-only SQL query under the caller's
+     * scope.
      *
      * @param question the natural-language data question
      * @param datasourceId datasource id (omit for the default)
+     * @param scope the caller's data scope (injected, never model-supplied)
      * @return the SQL and result rows as JSON
      */
     @Tool(
@@ -131,8 +149,9 @@ public class SqlTools {
                             name = "datasource_id",
                             description = "Datasource id; omit for the default datasource",
                             required = false)
-                    String datasourceId) {
-        Text2SqlResult result = pipeline.runBlocking(null, datasourceId, question);
+                    String datasourceId,
+            DataScope scope) {
+        Text2SqlResult result = pipeline.runBlocking(scope, datasourceId, question);
         try {
             return objectMapper.writeValueAsString(result);
         } catch (JsonProcessingException ex) {
@@ -140,7 +159,10 @@ public class SqlTools {
         }
     }
 
-    private List<TableSchema> describeTables(String datasourceId) {
-        return introspector.introspect(registry.resolve(datasourceId));
+    private List<TableSchema> describeTables(String datasourceId, DataScope scope) {
+        Set<String> allowed = policy.tablesFor(scope.role());
+        return introspector.introspect(registry.resolve(datasourceId)).stream()
+                .filter(table -> allowed.contains(table.name().toLowerCase(Locale.ROOT)))
+                .toList();
     }
 }

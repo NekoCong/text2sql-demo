@@ -3,7 +3,11 @@ package com.nekocong.text2sql.schema;
 import com.nekocong.text2sql.config.Nl2SqlProperties;
 import com.nekocong.text2sql.datasource.DataSourceRegistry;
 import com.nekocong.text2sql.schema.model.TableSchema;
+import com.nekocong.text2sql.security.DataScope;
+import com.nekocong.text2sql.security.TablePolicy;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +38,7 @@ public class FullSchemaProvider implements SchemaProvider {
     private final SchemaIntrospector introspector;
     private final SchemaRenderer renderer;
     private final Nl2SqlProperties properties;
+    private final TablePolicy policy;
 
     /**
      * Creates the provider.
@@ -42,22 +47,29 @@ public class FullSchemaProvider implements SchemaProvider {
      * @param introspector the JDBC schema introspector
      * @param renderer the DDL renderer
      * @param properties the NL2SQL limits
+     * @param policy the table policy used to hide out-of-scope tables
      */
     public FullSchemaProvider(
             DataSourceRegistry registry,
             SchemaIntrospector introspector,
             SchemaRenderer renderer,
-            Nl2SqlProperties properties) {
+            Nl2SqlProperties properties,
+            TablePolicy policy) {
         this.registry = registry;
         this.introspector = introspector;
         this.renderer = renderer;
         this.properties = properties;
+        this.policy = policy;
     }
 
     @Override
-    public String renderForPrompt(String datasourceId, String question) {
+    public String renderForPrompt(String datasourceId, DataScope scope, String question) {
         DataSource dataSource = registry.resolve(datasourceId);
-        List<TableSchema> tables = introspector.introspect(dataSource);
+        Set<String> allowed = policy.tablesFor(scope.role());
+        List<TableSchema> tables =
+                introspector.introspect(dataSource).stream()
+                        .filter(table -> allowed.contains(table.name().toLowerCase(Locale.ROOT)))
+                        .toList();
         return render(tables);
     }
 

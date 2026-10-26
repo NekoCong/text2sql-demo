@@ -10,6 +10,8 @@ import com.nekocong.text2sql.nl2sql.SqlEvent;
 import com.nekocong.text2sql.nl2sql.StepEvent;
 import com.nekocong.text2sql.nl2sql.Text2SqlEvent;
 import com.nekocong.text2sql.nl2sql.Text2SqlResult;
+import com.nekocong.text2sql.security.DataScope;
+import com.nekocong.text2sql.security.DataScopeResolver;
 import com.nekocong.text2sql.security.Roles;
 import com.nekocong.text2sql.service.ConversationService;
 import com.nekocong.text2sql.service.Text2SqlAgentService;
@@ -44,6 +46,7 @@ public class Text2SqlController {
     private final Text2SqlPipelineService pipeline;
     private final Text2SqlAgentService agentService;
     private final ConversationService conversations;
+    private final DataScopeResolver scopes;
     private final ObjectMapper objectMapper;
 
     /**
@@ -52,16 +55,19 @@ public class Text2SqlController {
      * @param pipeline the deterministic NL2SQL pipeline
      * @param agentService the AgentScope chat agent service
      * @param conversations the conversation service (persistence)
+     * @param scopes resolves the caller's data scope
      * @param objectMapper the shared Jackson mapper
      */
     public Text2SqlController(
             Text2SqlPipelineService pipeline,
             Text2SqlAgentService agentService,
             ConversationService conversations,
+            DataScopeResolver scopes,
             ObjectMapper objectMapper) {
         this.pipeline = pipeline;
         this.agentService = agentService;
         this.conversations = conversations;
+        this.scopes = scopes;
         this.objectMapper = objectMapper;
     }
 
@@ -87,35 +93,39 @@ public class Text2SqlController {
         AtomicReference<RowsEvent> rowsRef = new AtomicReference<>();
         AtomicReference<ChartEvent> chartRef = new AtomicReference<>();
 
-        return resolveConversation(userId, isAdmin, conversationId, datasourceId, message)
+        return scopes
+                .resolve(userId, jwt.getClaimAsString(Roles.CLAIM))
                 .flatMapMany(
-                        convo -> {
-                            Flux<ServerSentEvent<String>> head =
-                                    Flux.just(
-                                            sse(
-                                                    "conversation",
-                                                    json(Map.of("id", convo.id(), "title", convo.title()))));
-                            Flux<ServerSentEvent<String>> body =
-                                    pipeline.stream(userId, datasourceId, message)
-                                            .doOnNext(
-                                                    event -> {
-                                                        if (event instanceof SqlEvent sql) {
-                                                            sqlRef.set(sql);
-                                                        } else if (event instanceof RowsEvent rows) {
-                                                            rowsRef.set(rows);
-                                                        } else if (event instanceof ChartEvent chart) {
-                                                            chartRef.set(chart);
-                                                        }
-                                                    })
-                                            .map(this::toSse);
-                            Mono<ServerSentEvent<String>> tail =
-                                    // Deferred so the captured sql/rows/chart are read *after* the
-                                    // stream has emitted them (otherwise the assistant row is saved
-                                    // empty, and reloading the conversation shows blank answers).
-                                    Mono.defer(() -> persistAssistant(convo.id(), sqlRef, rowsRef, chartRef))
-                                            .thenReturn(sse("done", "[DONE]"));
-                            return Flux.concat(head, body, tail);
-                        })
+                        scope ->
+                                resolveConversation(userId, isAdmin, conversationId, datasourceId, message)
+                                        .flatMapMany(
+                                                convo -> {
+                                                    Flux<ServerSentEvent<String>> head =
+                                                            Flux.just(
+                                                                    sse(
+                                                                            "conversation",
+                                                                            json(Map.of("id", convo.id(), "title", convo.title()))));
+                                                    Flux<ServerSentEvent<String>> body =
+                                                            pipeline.stream(scope, datasourceId, message)
+                                                                    .doOnNext(
+                                                                            event -> {
+                                                                                if (event instanceof SqlEvent sql) {
+                                                                                    sqlRef.set(sql);
+                                                                                } else if (event instanceof RowsEvent rows) {
+                                                                                    rowsRef.set(rows);
+                                                                                } else if (event instanceof ChartEvent chart) {
+                                                                                    chartRef.set(chart);
+                                                                                }
+                                                                            })
+                                                                    .map(this::toSse);
+                                                    Mono<ServerSentEvent<String>> tail =
+                                                            // Deferred so the captured sql/rows/chart are read *after* the
+                                                            // stream has emitted them (otherwise the assistant row is saved
+                                                            // empty, and reloading the conversation shows blank answers).
+                                                            Mono.defer(() -> persistAssistant(convo.id(), sqlRef, rowsRef, chartRef))
+                                                                    .thenReturn(sse("done", "[DONE]"));
+                                                    return Flux.concat(head, body, tail);
+                                                }))
                 .onErrorResume(ex -> Flux.just(sse("error", errorMessage(ex))));
     }
 
@@ -128,7 +138,9 @@ public class Text2SqlController {
      */
     @PostMapping("/query")
     public Mono<Text2SqlResult> query(@AuthenticationPrincipal Jwt jwt, @RequestBody ChatRequest request) {
-        return pipeline.run(jwt.getSubject(), request.datasourceId(), request.message());
+        return scopes
+                .resolve(jwt.getSubject(), jwt.getClaimAsString(Roles.CLAIM))
+                .flatMap(scope -> pipeline.run(scope, request.datasourceId(), request.message()));
     }
 
     /**
@@ -150,10 +162,14 @@ public class Text2SqlController {
         // user keeps one account from resuming another account's agent session (the same rule the
         // conversation endpoints enforce), and stops every user from sharing one session.
         String scopedSessionId = userId + ":" + sessionId;
-        return agentService
-                .stream(message, scopedSessionId, userId)
-                .filter(event -> event instanceof TextBlockDeltaEvent)
-                .map(event -> sse("delta", ((TextBlockDeltaEvent) event).getDelta()))
+        return scopes
+                .resolve(userId, jwt.getClaimAsString(Roles.CLAIM))
+                .flatMapMany(
+                        scope ->
+                                agentService
+                                        .stream(message, scopedSessionId, scope)
+                                        .filter(event -> event instanceof TextBlockDeltaEvent)
+                                        .map(event -> sse("delta", ((TextBlockDeltaEvent) event).getDelta())))
                 .concatWith(Mono.just(sse("done", "[DONE]")))
                 .onErrorResume(ex -> Flux.just(sse("error", errorMessage(ex))));
     }

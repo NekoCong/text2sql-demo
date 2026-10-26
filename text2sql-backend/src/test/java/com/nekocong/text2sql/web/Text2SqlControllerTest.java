@@ -52,4 +52,20 @@ class Text2SqlControllerTest {
                 .jsonPath("$[0].default")
                 .isEqualTo(true);
     }
+
+    @Test
+    void queryIsForbiddenForAnAccountWithoutDataScope() {
+        // Registration creates a student with no user_scope rows: the permission layer must reject
+        // the request instead of running an unscoped query.
+        String token = TestAuth.registerAndLogin(client);
+
+        client.post()
+                .uri("/api/text2sql/query")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue("{\"message\":\"我的成绩\"}")
+                .exchange()
+                .expectStatus()
+                .isForbidden();
+    }
 }
