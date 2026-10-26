@@ -135,9 +135,72 @@ export function streamText2Sql(
 
   source.addEventListener('error', (event) => {
     // A payload means the backend emitted a named "error" event; no payload means the
-    // connection dropped.
+    // connection dropped. Agent errors carry a JSON body with a readable message.
     const data = (event as MessageEvent<string>).data
-    handlers.onError?.(data && data.length > 0 ? data : '连接已断开')
+    handlers.onError?.(data && data.length > 0 ? errorMessage(data) : '连接已断开')
+    source.close()
+  })
+
+  return () => source.close()
+}
+
+/** Extracts a readable reason from an `error` payload (JSON `{message}` or plain text). */
+function errorMessage(raw: string): string {
+  try {
+    const payload = JSON.parse(raw) as { message?: string }
+    return payload.message ?? raw
+  } catch {
+    return raw
+  }
+}
+
+/**
+ * Opens the AgentScope stream. Unlike the deterministic pipeline it has no conversation
+ * persistence; it emits token deltas plus the tool steps and the enforced SQL.
+ *
+ * @param message natural-language question
+ * @param sessionId agent session id
+ * @param handlers delta / step / sql / done / error callbacks
+ * @returns a function that closes the stream
+ */
+export function streamAgent(
+  message: string,
+  sessionId: string,
+  handlers: SseHandlers,
+): () => void {
+  const params = new URLSearchParams({ message, sessionId })
+  const token = readToken()
+  if (token) {
+    params.set('access_token', token)
+  }
+  const source = new EventSource(`/api/text2sql/agent/stream?${params.toString()}`)
+
+  source.addEventListener('delta', (event) => {
+    handlers.onDelta((event as MessageEvent<string>).data)
+  })
+
+  source.addEventListener('step', (event) => {
+    const step = parseEventData<RunStep>((event as MessageEvent<string>).data)
+    if (typeof step !== 'string') {
+      handlers.onStep?.(step)
+    }
+  })
+
+  source.addEventListener('sql', (event) => {
+    const payload = parseEventData<SqlEvent>((event as MessageEvent<string>).data)
+    if (typeof payload !== 'string') {
+      handlers.onSql?.(payload)
+    }
+  })
+
+  source.addEventListener('done', () => {
+    handlers.onDone?.()
+    source.close()
+  })
+
+  source.addEventListener('error', (event) => {
+    const data = (event as MessageEvent<string>).data
+    handlers.onError?.(data && data.length > 0 ? errorMessage(data) : '连接已断开')
     source.close()
   })
 

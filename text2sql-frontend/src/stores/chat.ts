@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { ChatMessage, ConversationEvent, Datasource } from '@/types'
-import { listDatasources, streamText2Sql } from '@/api/text2sql'
+import { listDatasources, streamAgent, streamText2Sql } from '@/api/text2sql'
 
 function newId(): string {
   return crypto.randomUUID()
@@ -17,6 +17,8 @@ export const useChatStore = defineStore('chat', () => {
   const streaming = ref(false)
   const datasources = ref<Datasource[]>([])
   const datasourceId = ref('')
+  /** Switches between the deterministic pipeline and the AgentScope agent. */
+  const agentMode = ref(false)
 
   let cancelStream: (() => void) | null = null
 
@@ -63,6 +65,37 @@ export const useChatStore = defineStore('chat', () => {
         steps: [],
       }) - 1
     streaming.value = true
+
+    if (agentMode.value) {
+      cancelStream = streamAgent(text, 'default', {
+        onDelta: (delta) => {
+          messages.value[assistantIndex].content += delta
+        },
+        onStep: (step) => {
+          const assistant = messages.value[assistantIndex]
+          assistant.steps = [...(assistant.steps ?? []), step]
+        },
+        onSql: (payload) => {
+          const assistant = messages.value[assistantIndex]
+          assistant.sql = payload.sql
+          assistant.scopeApplied = payload.scopeApplied === true
+        },
+        onDone: () => {
+          messages.value[assistantIndex].streaming = false
+          streaming.value = false
+          cancelStream = null
+        },
+        onError: (message) => {
+          const assistant = messages.value[assistantIndex]
+          assistant.streaming = false
+          assistant.error = true
+          assistant.content = assistant.content || `⚠️ ${message}`
+          streaming.value = false
+          cancelStream = null
+        },
+      })
+      return
+    }
 
     cancelStream = streamText2Sql(text, datasourceId.value, conversationId, {
       onConversation: (event) => {
@@ -137,6 +170,7 @@ export const useChatStore = defineStore('chat', () => {
     streaming,
     datasources,
     datasourceId,
+    agentMode,
     loadDatasources,
     send,
     stop,

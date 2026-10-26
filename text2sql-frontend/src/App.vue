@@ -85,6 +85,9 @@ watch(
       >
         <el-menu-item index="/">对话</el-menu-item>
         <el-menu-item index="/datasources">数据源</el-menu-item>
+        <el-menu-item v-if="auth.user?.role === 'admin'" index="/admin/datasource-access">
+          数据源权限
+        </el-menu-item>
         <el-menu-item index="/about">关于</el-menu-item>
       </el-menu>
 

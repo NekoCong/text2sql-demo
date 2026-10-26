@@ -3,6 +3,8 @@ export interface AuthUser {
   id: string
   username: string
   displayName: string | null
+  /** Backend role: `admin` | `student` | `counselor`. */
+  role?: string
 }
 
 /** Successful `register` / `login` response: the JWT plus the resolved user. */
@@ -75,16 +77,25 @@ export type RunPhase = 'introspect' | 'generate' | 'execute'
 
 /** A single pipeline progress entry emitted while answering. */
 export interface RunStep {
-  phase: RunPhase
-  detail: string
+  phase: RunPhase | 'tool' | string
+  detail?: string
+  /** Agent tool steps: tool name, start/end status, terminal state and failure reason. */
+  tool?: string
+  status?: string
+  state?: string
+  reason?: string
 }
 
 /** Payload of the `sql` SSE event. */
 export interface SqlEvent {
   datasourceId: string
-  dialect: string
   sql: string
-  explanation: string | null
+  dialect?: string
+  explanation?: string | null
+  /** Agent stream: rows produced by the enforced query. */
+  rowCount?: number
+  /** Agent stream: the SQL already carries the caller's data scope. */
+  scopeApplied?: boolean
 }
 
 /** Chart kind suggested by the backend result visualization. */
@@ -119,6 +130,8 @@ export interface ChatMessage {
   rows?: QueryResult
   /** Chart suggestion rendered above the result table. */
   chart?: ChartSpec
+  /** True when the displayed SQL was filtered for the caller's data scope. */
+  scopeApplied?: boolean
 }
 
 /** Payload of the `conversation` SSE event: the conversation the exchange persisted to. */

@@ -6,6 +6,8 @@ declare module 'vue-router' {
     title?: string
     /** Routes reachable without a session (the login page). */
     public?: boolean
+    /** Routes only administrators may open. */
+    admin?: boolean
   }
 }
 
@@ -37,6 +39,12 @@ const router = createRouter({
       meta: { title: '模型配置' },
     },
     {
+      path: '/admin/datasource-access',
+      name: 'datasource-access',
+      component: () => import('@/views/DataSourceAccessView.vue'),
+      meta: { title: '数据源权限', admin: true },
+    },
+    {
       path: '/about',
       name: 'about',
       component: () => import('@/views/AboutView.vue'),
@@ -54,6 +62,9 @@ router.beforeEach(async (to) => {
     return { name: 'login' }
   }
   if (to.meta.public === true && auth.isAuthenticated) {
+    return { name: 'chat' }
+  }
+  if (to.meta.admin === true && auth.user?.role !== 'admin') {
     return { name: 'chat' }
   }
   return true

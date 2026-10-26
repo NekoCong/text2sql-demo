@@ -160,7 +160,26 @@ function segments(content: string) {
 
 /** Steps that carry a real detail line; empty-detail steps are not rendered. */
 function visibleSteps(message: ChatMessage): RunStep[] {
-  return (message.steps ?? []).filter((step) => step.detail.trim().length > 0)
+  return (message.steps ?? []).filter((step) => stepText(step).length > 0)
+}
+
+/** Readable label for a pipeline step or an agent tool step. */
+function stepText(step: RunStep): string {
+  if (step.detail) {
+    return step.detail
+  }
+  if (step.phase === 'tool') {
+    const name = step.tool || '工具'
+    if (step.status === 'start') {
+      return `调用 ${name}…`
+    }
+    if (step.state === 'success') {
+      return `${name} 完成`
+    }
+    const suffix = step.reason ? `：${step.reason}` : ''
+    return `${name} ${step.state ?? '结束'}${suffix}`
+  }
+  return ''
 }
 
 /** Structured messages (steps / SQL / rows) get the full bubble width. */
@@ -224,6 +243,13 @@ watch(
         <div class="chat__header">
           <span class="chat__title">Text2SQL 对话</span>
           <div class="chat__header-actions">
+            <el-switch
+              v-model="chat.agentMode"
+              inline-prompt
+              active-text="Agent"
+              inactive-text="流水线"
+              :disabled="chat.streaming"
+            />
             <el-select
               v-model="chat.datasourceId"
               class="chat__datasource"
@@ -279,7 +305,7 @@ watch(
             >
               <div v-for="(step, index) in visibleSteps(message)" :key="index" class="steps__item">
                 <span class="steps__dot" />
-                <span class="steps__detail">{{ step.detail }}</span>
+                <span class="steps__detail">{{ stepText(step) }}</span>
               </div>
             </div>
 
@@ -295,6 +321,9 @@ watch(
                 <span class="sql__label">SQL</span>
                 <el-tag v-if="message.dialect" size="small" effect="plain" type="info">
                   {{ message.dialect }}
+                </el-tag>
+                <el-tag v-if="message.scopeApplied" size="small" effect="plain" type="success">
+                  已按当前数据范围过滤
                 </el-tag>
                 <el-button
                   class="sql__copy"
