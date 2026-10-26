@@ -101,7 +101,8 @@ public class Text2SqlPipelineService {
         String dialect = dialectOf(id);
         return Mono.zip(schema(id, scope, question), modelResolver.resolve(scope.userId()))
                 .flatMap(pair -> generationService.generate(pair.getT2(), dialect, pair.getT1(), question))
-                .flatMap(generation -> execute(id, dialect, generation, scope, listener));
+                .flatMap(generation -> execute(id, dialect, generation, scope, listener))
+                .doOnError(error -> listener.onFailure(id, errorMessage(error)));
     }
 
     /**
@@ -165,7 +166,8 @@ public class Text2SqlPipelineService {
                                                 Flux.just(new StepEvent("generate", "调用模型生成 SQL")),
                                                 generationService
                                                         .generate(pair.getT2(), dialect, pair.getT1(), question)
-                                                        .flatMapMany(gen -> toEvents(id, dialect, gen, scope, listener)))));
+                                                        .flatMapMany(gen -> toEvents(id, dialect, gen, scope, listener)))))
+                .doOnError(error -> listener.onFailure(id, errorMessage(error)));
     }
 
     private Flux<Text2SqlEvent> toEvents(
@@ -181,7 +183,6 @@ public class Text2SqlPipelineService {
                 sqlExecutor
                         .execute(id, safeSql)
                         .doOnNext(rows -> listener.onSuccess(id, safeSql, rows.rowCount()))
-                        .doOnError(error -> listener.onFailure(id, errorMessage(error)))
                         .flatMapMany(
                                 rows ->
                                         Flux.just(
@@ -198,7 +199,6 @@ public class Text2SqlPipelineService {
         return sqlExecutor
                 .execute(id, safeSql)
                 .doOnNext(rows -> listener.onSuccess(id, safeSql, rows.rowCount()))
-                .doOnError(error -> listener.onFailure(id, errorMessage(error)))
                 .map(
                         result ->
                                 new Text2SqlResult(

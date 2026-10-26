@@ -57,9 +57,7 @@ public class Text2SqlAgentService {
                         model ->
                                 Flux.defer(
                                         () -> {
-                                            Sinks.Many<AgentEvent> side =
-                                                    Sinks.many().unicast().onBackpressureBuffer();
-                                            ExecutionListener listener = sideChannel(side);
+                                            AgentSideChannel side = new AgentSideChannel();
                                             RuntimeContext ctx =
                                                     RuntimeContext.builder()
                                                             .sessionId(sessionId)
@@ -69,45 +67,13 @@ public class Text2SqlAgentService {
                                             // AgentScope resolves them from this context instead of
                                             // the model-facing input.
                                             ctx.put(DataScope.class, scope);
-                                            ctx.put(ExecutionListener.class, listener);
-                                            Flux<AgentEvent> agent =
+                                            ctx.put(ExecutionListener.class, side.listener());
+                                            return side.merge(
                                                     agentFactory
                                                             .create(model)
-                                                            .streamEvents(new UserMessage(message), ctx)
-                                                            .doFinally(signal -> side.tryEmitComplete());
-                                            return Flux.merge(agent, side.asFlux());
+                                                            .streamEvents(new UserMessage(message), ctx));
                                         }))
                 .subscribeOn(Schedulers.boundedElastic());
-    }
-
-    /**
-     * Turns pipeline callbacks into custom agent events, so the web layer can show the enforced SQL
-     * without parsing tool output.
-     */
-    private static ExecutionListener sideChannel(Sinks.Many<AgentEvent> side) {
-        return new ExecutionListener() {
-            @Override
-            public void onSuccess(String datasourceId, String sql, int rowCount) {
-                side.tryEmitNext(
-                        new CustomEvent(
-                                "sql",
-                                Map.of(
-                                        "datasourceId", datasourceId == null ? "" : datasourceId,
-                                        "sql", sql,
-                                        "rowCount", rowCount,
-                                        "scopeApplied", true)));
-            }
-
-            @Override
-            public void onFailure(String datasourceId, String message) {
-                side.tryEmitNext(
-                        new CustomEvent(
-                                "error",
-                                Map.of(
-                                        "datasourceId", datasourceId == null ? "" : datasourceId,
-                                        "message", message == null ? "" : message)));
-            }
-        };
     }
 
     /**

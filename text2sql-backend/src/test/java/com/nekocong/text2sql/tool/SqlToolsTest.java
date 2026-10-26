@@ -87,7 +87,7 @@ class SqlToolsTest {
     }
 
     @Test
-    void failedQueryIsReportedToTheListener() {
+    void queryDatabasePropagatesPipelineFailures() {
         Text2SqlPipelineService failing =
                 new Text2SqlPipelineService(null, null, null, null, null, null, null, null) {
                     @Override
@@ -102,27 +102,10 @@ class SqlToolsTest {
         SqlTools tools =
                 new SqlTools(
                         registry, introspector, renderer, failing, new TablePolicy(), new ObjectMapper());
-        AtomicReference<String> failure = new AtomicReference<>();
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
-                        () ->
-                                tools.queryDatabase(
-                                        "q",
-                                        "campus",
-                                        studentScope(),
-                                        new ExecutionListener() {
-                                            @Override
-                                            public void onSuccess(String ds, String sql, int rows) {
-                                                // not expected
-                                            }
-
-                                            @Override
-                                            public void onFailure(String ds, String message) {
-                                                failure.set(message);
-                                            }
-                                        }))
+                        () -> tools.queryDatabase("q", "campus", studentScope(), ExecutionListener.noop()))
                 .isInstanceOf(IllegalStateException.class);
-        assertThat(failure.get()).isEqualTo("denied for test");
     }
 
     private static DataScope studentScope() {

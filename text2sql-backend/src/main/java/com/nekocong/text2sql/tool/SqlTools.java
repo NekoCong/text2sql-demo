@@ -151,14 +151,7 @@ public class SqlTools {
                     String datasourceId,
             DataScope scope,
             ExecutionListener listener) {
-        Text2SqlResult result;
-        try {
-            result = pipeline.runBlocking(scope, datasourceId, question, listener);
-        } catch (RuntimeException ex) {
-            String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
-            listener.onFailure(datasourceId, message);
-            throw ex;
-        }
+        Text2SqlResult result = pipeline.runBlocking(scope, datasourceId, question, listener);
         try {
             return objectMapper.writeValueAsString(result);
         } catch (JsonProcessingException ex) {

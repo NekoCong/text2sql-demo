@@ -32,20 +32,33 @@ class AgentEventPresenterTest {
     }
 
     @Test
-    void toolCallsBecomeSteps() {
+    void toolCallsBecomeSteps() throws Exception {
         ServerSentEvent<String> start =
                 present(new ToolCallStartEvent("r1", "c1", "query_database"));
         assertThat(start.event()).isEqualTo("step");
-        assertThat(start.data()).contains("query_database").contains("\"status\":\"start\"");
+        assertThat(new ObjectMapper().readTree(start.data()).get("tool").asText())
+                .isEqualTo("query_database");
+        assertThat(new ObjectMapper().readTree(start.data()).get("status").asText()).isEqualTo("start");
 
         ServerSentEvent<String> end =
                 present(new ToolResultEndEvent("r1", "c1", "query_database", ToolResultState.ERROR));
         assertThat(end.event()).isEqualTo("step");
-        assertThat(end.data()).contains("query_database").contains("\"state\":\"error\"");
+        assertThat(new ObjectMapper().readTree(end.data()).get("state").asText()).isEqualTo("error");
+        assertThat(new ObjectMapper().readTree(end.data()).get("reason").asText())
+                .contains("工具执行失败");
     }
 
     @Test
-    void sqlEventsCarryTheEnforcedStatement() {
+    void deniedToolCallsCarryAReadableReason() throws Exception {
+        ServerSentEvent<String> denied =
+                present(new ToolResultEndEvent("r1", "c1", "query_database", ToolResultState.DENIED));
+
+        assertThat(new ObjectMapper().readTree(denied.data()).get("reason").asText())
+                .contains("拒绝");
+    }
+
+    @Test
+    void sqlEventsCarryTheEnforcedStatement() throws Exception {
         ServerSentEvent<String> event =
                 present(
                         new CustomEvent(
@@ -57,7 +70,10 @@ class AgentEventPresenterTest {
                                         "scopeApplied", true)));
 
         assertThat(event.event()).isEqualTo("sql");
-        assertThat(event.data()).contains("SELECT 1").contains("\"scopeApplied\":true");
+        var json = new ObjectMapper().readTree(event.data());
+        assertThat(json.get("sql").asText()).isEqualTo("SELECT 1");
+        assertThat(json.get("rowCount").asInt()).isEqualTo(1);
+        assertThat(json.get("scopeApplied").asBoolean()).isTrue();
     }
 
     @Test

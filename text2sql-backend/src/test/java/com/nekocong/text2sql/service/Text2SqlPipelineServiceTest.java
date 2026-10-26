@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nekocong.text2sql.nl2sql.ExecutionListener;
 import com.nekocong.text2sql.datasource.DataSourceRegistry;
 import com.nekocong.text2sql.gbi.ChartInference;
 import com.nekocong.text2sql.modelconfig.ModelResolver;
@@ -159,6 +160,69 @@ class Text2SqlPipelineServiceTest {
 
     private static DataScope studentScope() {
         return new DataScope("u-student", "student", Set.of(1L), 1L, "2023001", Set.of("campus"));
+    }
+
+    @Test
+    void listenerReceivesTheEnforcedSqlAndRowCount() {
+        Text2SqlPipelineService pipeline =
+                pipelineReturning("SELECT COUNT(*) AS student_count FROM student", "counts");
+        java.util.concurrent.atomic.AtomicReference<String> sql = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<String> datasource =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicInteger rows = new java.util.concurrent.atomic.AtomicInteger();
+
+        Text2SqlResult result =
+                pipeline.run(
+                        studentScope(),
+                        null,
+                        "how many students",
+                        new ExecutionListener() {
+                            @Override
+                            public void onSuccess(String ds, String executedSql, int rowCount) {
+                                datasource.set(ds);
+                                sql.set(executedSql);
+                                rows.set(rowCount);
+                            }
+
+                            @Override
+                            public void onFailure(String ds, String message) {
+                                // not expected
+                            }
+                        })
+                        .block();
+
+        assertThat(sql.get()).isEqualTo(result.sql());
+        assertThat(sql.get()).containsIgnoringCase("student_no IN ('2023001')");
+        assertThat(datasource.get()).isEqualTo("campus");
+        assertThat(rows.get()).isEqualTo(1);
+    }
+
+    @Test
+    void listenerReceivesTheFailureReason() {
+        Text2SqlPipelineService pipeline = pipelineReturning("SELECT * FROM salary", null);
+        java.util.concurrent.atomic.AtomicReference<String> failure =
+                new java.util.concurrent.atomic.AtomicReference<>();
+
+        assertThatThrownBy(
+                        () ->
+                                pipeline.run(
+                                                studentScope(),
+                                                null,
+                                                "工资",
+                                                new ExecutionListener() {
+                                                    @Override
+                                                    public void onSuccess(String ds, String sql, int rowCount) {
+                                                        // not expected
+                                                    }
+
+                                                    @Override
+                                                    public void onFailure(String ds, String message) {
+                                                        failure.set(message);
+                                                    }
+                                                })
+                                        .block())
+                .isInstanceOf(com.nekocong.text2sql.security.SqlPermissionException.class);
+        assertThat(failure.get()).contains("salary");
     }
 
     private static int indexOf(List<Text2SqlEvent> events, Class<? extends Text2SqlEvent> type) {
