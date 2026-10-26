@@ -119,13 +119,14 @@ public class AuthService {
     }
 
     private AuthResult issue(AppUser user) {
+        String canonical = Roles.normalize(user.role());
         return new AuthResult(
                 jwtService.issue(user.id(), user.username(), user.role()),
                 jwtService.ttlSeconds(),
                 user.id(),
                 user.username(),
                 user.displayName(),
-                Roles.normalize(user.role()));
+                canonical == null ? user.role() : canonical);
     }
 
     private static String require(String value, String message) {

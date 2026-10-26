@@ -85,16 +85,21 @@ public class SecurityConfig {
     /**
      * Maps the JWT {@code role} claim to a single granted authority.
      *
+     * <p>An unknown or missing role maps to {@code ROLE_NONE}: the caller stays authenticated but
+     * carries no role authority, so both the data-permission layer and role-guarded endpoints
+     * reject it.
+     *
      * @return the converter
      */
     @Bean
     Converter<Jwt, Mono<AbstractAuthenticationToken>> roleAuthenticationConverter() {
         ReactiveJwtAuthenticationConverter converter = new ReactiveJwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(
-                jwt ->
-                        Flux.just(
-                                new SimpleGrantedAuthority(
-                                        "ROLE_" + Roles.normalize(jwt.getClaimAsString(Roles.CLAIM)).toUpperCase(Locale.ROOT))));
+                jwt -> {
+                    String role = Roles.normalize(jwt.getClaimAsString(Roles.CLAIM));
+                    String authority = "ROLE_" + (role == null ? "NONE" : role.toUpperCase(Locale.ROOT));
+                    return Flux.just(new SimpleGrantedAuthority(authority));
+                });
         return converter;
     }
 

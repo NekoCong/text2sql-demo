@@ -35,23 +35,24 @@ public final class Roles {
     private Roles() {}
 
     /**
-     * Canonicalizes a role name, falling back to {@link #USER} for anything unrecognized.
+     * Canonicalizes a role name.
      *
-     * <p>The fallback is a legacy marker, not a grant: the data-permission layer rejects {@link
-     * #USER} because it carries no scope.
+     * <p>Returns {@code null} for anything unrecognized (including the legacy {@link #USER}). Callers
+     * must treat {@code null} as "no data permission": silently downgrading an unknown role to a
+     * scoped role would grant a scope the account was never configured for.
      *
      * @param role the raw role value (may be {@code null})
-     * @return one of {@link #ADMIN}, {@link #STUDENT}, {@link #COUNSELOR}, or {@link #USER}
+     * @return one of {@link #ADMIN}, {@link #STUDENT}, {@link #COUNSELOR}, or {@code null}
      */
     public static String normalize(String role) {
         if (role == null) {
-            return USER;
+            return null;
         }
         return switch (role.toLowerCase(java.util.Locale.ROOT)) {
             case ADMIN -> ADMIN;
             case STUDENT -> STUDENT;
             case COUNSELOR -> COUNSELOR;
-            default -> USER;
+            default -> null;
         };
     }
 

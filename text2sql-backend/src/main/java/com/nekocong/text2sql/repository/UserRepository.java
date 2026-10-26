@@ -58,7 +58,7 @@ public class UserRepository {
      * @param username the username
      * @param passwordHash the BCrypt hash
      * @param displayName the display name
-     * @param role the role name ({@code admin} or {@code user})
+     * @param role the role name ({@code admin}, {@code student} or {@code counselor})
      * @return the inserted user
      */
     public Mono<AppUser> insert(String username, String passwordHash, String displayName, String role) {
