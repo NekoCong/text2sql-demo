@@ -53,6 +53,10 @@ SSE: step(introspect/generate/execute) → sql → rows → done
 | `SchemaProvider` / `FullSchemaProvider` | `schema` | 生成提示词用 schema 文本（带字符预算） |
 | `SchemaRenderer` | `schema` | 表结构 → 紧凑 DDL |
 | `SqlSafetyValidator` | `sql` | 只读校验（多语句、非 SELECT、危险关键字） |
+| `TablePolicy` | `security` | 角色 → 可访问表 + 行过滤谓词模板 |
+| `DataScopeResolver` / `DataScope` | `security` | 从应用库解析调用者的角色、班级、学号与可用数据源 |
+| `DataScopeRewriter` | `sql` | AST 重写：把受保护表的引用替换为带过滤谓词的派生表（fail-closed） |
+| `DatasourceAccessGuard` | `datasource` | 数据源白名单判定与默认回落 |
 | `SqlExecutor` | `sql` | 只读执行、行数上限、超时、结果集映射 |
 | `PromptAssembler` | `nl2sql` | 系统/用户提示词 |
 | `SqlGenerationService` | `nl2sql` | 调用 AgentScope `Model` 生成 SQL |
@@ -67,20 +71,26 @@ SSE: step(introspect/generate/execute) → sql → rows → done
 
 1. **语句级**：仅单条语句；必须以 `SELECT` / `WITH` 开头；标识符扫描阻断
    `INSERT/UPDATE/DELETE/DROP/ALTER/.../INTO/...`。
-2. **连接级**：`Connection.setReadOnly(true)`；建议数据源使用只读账号。
-3. **资源级**：`Statement.setMaxRows(rowLimit+1)`（检测截断）、`setQueryTimeout(timeout)`。
-4. **线程级**：阻塞 JDBC 全部在 `Schedulers.boundedElastic()` 上执行，绝不阻塞 Netty 事件循环。
+2. **权限级（强制的数据边界）**：生成的 SQL 在执行前经 `DataScopeRewriter` 做 AST 重写，
+   每张受保护表的引用变成带过滤谓词的派生表（学生按本人、辅导员按所管班级）；模型未写过滤条件
+   也会被补上，写了越界条件只会得到空集。解析失败、结构不支持或引用白名单外的表时直接拒绝执行。
+3. **数据源级**：非管理员只能使用角色被授权的数据源；授权集合为空时失败，不回落到全局默认。
+4. **连接级**：`Connection.setReadOnly(true)`；建议数据源使用只读账号。
+5. **资源级**：`Statement.setMaxRows(rowLimit+1)`（检测截断）、`setQueryTimeout(timeout)`。
+6. **线程级**：阻塞 JDBC 全部在 `Schedulers.boundedElastic()` 上执行，绝不阻塞 Netty 事件循环。
 
 ## 5. SSE 事件契约（前端契约，与 AgentScope 内部事件解耦）
 
 | 事件 | 负载 |
 |------|------|
-| `step` | `{phase, detail}` |
-| `sql` | `{datasourceId, dialect, sql, explanation}` |
+| `step` | 流水线 `{phase, detail}`；Agent `{phase:"tool", status, tool, state?, reason?}` |
+| `sql` | 流水线 `{datasourceId, dialect, sql, explanation}`；Agent `{datasourceId, sql, rowCount, scopeApplied}` |
 | `rows` | `{columns:[{name,typeName}], rows:[{col:val}], rowCount, truncated, elapsedMs}` |
 | `chart` | `{type, xField, yField, title}` |
 | `delta` | 文本（Agent 模式） |
-| `done` / `error` | `[DONE]` / 文本 |
+| `done` / `error` | `[DONE]` / 文本或 `{message}` |
+
+两种路径展示的 `sql` 都是**已应用权限后实际执行**的语句。
 
 新增事件名对既有 `EventSource` 监听器无影响，因此契约可向后兼容地扩展。
 

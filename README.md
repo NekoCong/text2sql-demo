@@ -5,7 +5,7 @@
 
 核心能力（对齐 DB-GPT 的 NL2SQL 主链路）：
 
-1. **数据源接入** — 可插拔多数据源（默认 H2 内嵌，可切换 MySQL/PostgreSQL…），连接池缓存。
+1. **数据源接入** — 可插拔多数据源（默认 MySQL `campus`，测试用 H2 内存库），连接池缓存。
 2. **Schema 抽取** — 通过 JDBC `DatabaseMetaData` **实时**内省表/列/主键/外键，作为唯一事实来源。
 3. **NL2SQL 生成** — 复用 AgentScope 的模型层，把 schema + 问题转换为结构化 SQL（JSON）。
 4. **安全执行** — 只读连接 + 单语句/SELECT-only 校验 + 行数上限 + 超时。
@@ -70,8 +70,8 @@ mvn spring-boot:run
 |------|------|------|
 | GET  | `/api/text2sql/stream?message=...&datasourceId=...` | NL2SQL 流水线 SSE（`step` / `sql` / `rows` / `done` / `error`） |
 | POST | `/api/text2sql/query` | 同步返回结构化结果（sql + 结果集） |
-| GET  | `/api/text2sql/agent/stream?message=...&sessionId=...` | AgentScope 智能体 SSE（`delta` 令牌流，可调用 SQL 工具） |
-| GET  | `/api/text2sql/datasources` | 列出已配置数据源 |
+| GET  | `/api/text2sql/agent/stream?message=...&sessionId=...` | AgentScope 智能体 SSE（`delta` 令牌流 + `step` 工具步骤 + `sql` 实际执行语句） |
+| GET  | `/api/text2sql/datasources` | 列出**当前账号可用**的数据源 |
 | POST | `/api/text2sql/datasources` | 新增数据源（运行时，内存态） |
 | PUT  | `/api/text2sql/datasources/{id}` | 更新数据源 |
 | DELETE | `/api/text2sql/datasources/{id}` | 删除数据源 |
@@ -81,6 +81,9 @@ mvn spring-boot:run
 | GET  | `/api/text2sql/knowledge/documents?namespace=` | 列出知识库文档 |
 | DELETE | `/api/text2sql/knowledge/documents?namespace=&name=` | 删除知识库文档 |
 | POST | `/api/text2sql/knowledge/search` | 知识库检索 |
+| GET  | `/api/admin/datasource-access` | 角色 × 数据源授权矩阵（仅管理员） |
+| PUT  | `/api/admin/datasource-access/{role}/{datasourceId}` | 授权（仅管理员） |
+| DELETE | `/api/admin/datasource-access/{role}/{datasourceId}` | 撤销授权（仅管理员） |
 | POST | `/api/auth/register` | 注册（返回 JWT） |
 | POST | `/api/auth/login` | 登录（返回 JWT） |
 | GET  | `/api/auth/me` | 当前用户 |
@@ -93,20 +96,41 @@ mvn spring-boot:run
 | GET  | `/api/text2sql/health` | 健康检查 |
 
 > 除 `/api/auth/register`、`/api/auth/login`、`/api/text2sql/health` 与 `/actuator/**` 外，
-> 所有接口都需要 `Authorization: Bearer <token>`。SSE 端点（浏览器 `EventSource` 无法带请求头）
-> 支持 `?access_token=<token>` 查询参数。
+> 所有接口都需要 `Authorization: Bearer <token>`；`/api/admin/**` 还需要管理员角色。
+> SSE 端点（浏览器 `EventSource` 无法带请求头）支持 `?access_token=<token>` 查询参数。
 
 ### SSE 事件契约
 
 | 事件 | 负载 | 说明 |
 |------|------|------|
-| `step` | `{phase, detail}` | 流水线阶段：`introspect` / `generate` / `execute` |
-| `sql`  | `{datasourceId, dialect, sql, explanation}` | 已校验的 SQL 与解释 |
+| `step` | 流水线 `{phase, detail}`；Agent `{phase:"tool", status, tool, state?, reason?}` | 阶段或工具步骤（Agent 失败步骤带可读原因） |
+| `sql`  | 流水线 `{datasourceId, dialect, sql, explanation}`；Agent `{datasourceId, sql, rowCount, scopeApplied}` | **已应用数据权限后**实际执行的 SQL |
 | `rows` | `{columns, rows, rowCount, truncated, elapsedMs}` | 结果集（行以列名为键的对象数组） |
 | `chart`| `{type, xField, yField, title}` | GBI 图表推断（`BAR`/`LINE`/`PIE`/`NONE`） |
 | `delta`| 文本 | 仅 Agent 模式 |
 | `done` | `[DONE]` | 流结束 |
-| `error`| 文本 | 错误信息 |
+| `error`| 文本或 `{message}` | 错误信息（含权限拒绝原因） |
+
+## 演示账号与数据权限
+
+演示库是**智慧校园**域（`class` / `course` / `student` / `score` / `attendance`），角色与可见范围：
+
+| 账号 | 密码 | 角色 | 可见范围 |
+|------|------|------|----------|
+| `admin` | `admin123` | admin | 全部数据；可在「数据源权限」页维护授权 |
+| `student01` | `student123` | student | 仅本人（张伟，1 班） |
+| `student02` | `student123` | student | 仅本人（李娜，1 班） |
+| `student03` | `student123` | student | 仅本人（王强，2 班） |
+| `counselor01` | `counselor123` | counselor | 1 班与 2 班全部数据 |
+
+权限在服务端强制，与提示词无关：
+
+- 表级：非管理员只能引用校园五表；模型看到的 schema、元数据工具返回的表清单都按角色裁剪。
+- 行级：生成的 SQL 在执行前被重写为带过滤谓词的派生表（学生按 `student_no`/`student_id`，辅导员按 `class_id`），无法通过提示注入、子查询或 UNION 绕过；解析失败即拒绝执行。
+- 数据源级：非管理员只能使用被授权的数据源；管理员不受限。
+- 未配置数据范围的账号（例如刚注册的学生）一律拒绝，而不是返回空结果。
+
+未提交 SQL 生成 Key 时，权限拒绝、数据源与 schema 相关接口仍可用；只有模型生成步骤需要 Key。
 
 ## 启动前端
 
@@ -120,28 +144,28 @@ Vite 已将 `/api` 代理到 `http://localhost:8080`，前端无需配置后端�
 
 ## 配置
 
-后端配置位于 `text2sql-backend/src/main/resources/application.yaml`。
+后端配置位于 `text2sql-backend/src/main/resources/application.yml`。
 
 ### 数据源 `text2sql.datasources.*`
 
 | 键 | 说明 | 默认 |
 |----|------|------|
-| `default-id` | 默认数据源 id | `demo` |
+| `default-id` | 默认数据源 id | `campus` |
 | `items[].id` / `name` | 标识 / 展示名 | — |
 | `items[].driver` / `url` / `username` / `password` | JDBC 连接参数 | — |
 | `items[].dialect` | SQL 方言（省略则按 URL 推断） | 推断 |
 | `items[].seed` | 启动时执行 `db/schema.sql` + `db/data.sql` | `false` |
 
-默认内置一个 H2 内存数据源（`demo`，电商演示表，自动建表并灌入种子数据）。切换 MySQL 只需新增一个条目：
+主配置指向 MySQL 的 `campus` schema（`CAMPUS_DB_*`），并开启 `seed: true`，启动时自动建表并灌入校园种子数据。测试 profile 使用同名 H2 内存库。切换到其它库只需新增一个条目：
 
 ```yaml
 text2sql:
   datasources:
     items:
-      - id: mysql-demo
+      - id: mysql-campus
         name: Local MySQL
         driver: com.mysql.cj.jdbc.Driver
-        url: "jdbc:mysql://localhost:3306/demo?useSSL=false&serverTimezone=UTC"
+        url: "jdbc:mysql://localhost:3306/campus?useSSL=false&serverTimezone=UTC"
         username: root
         password: secret
         dialect: MYSQL

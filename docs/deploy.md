@@ -174,20 +174,21 @@ curl -s http://127.0.0.1/api/text2sql/health          # → OK
 # 前端
 curl -sI http://127.0.0.1/ | head -1                  # → HTTP/1.1 200 OK
 
-# 种子数据 + 角色是否真的生效（用 alice 登录）
+# 种子数据 + 角色是否真的生效（用 student01 登录）
 curl -s -X POST http://127.0.0.1/api/auth/login \
      -H 'Content-Type: application/json' \
-     -d '{"username":"alice","password":"alice123"}'
-# 响应里应含 "role":"user"；用返回的 token 调 /api/conversations 应只看到 2 条（都是 alice 的）
+     -d '{"username":"student01","password":"student123"}'
+# 响应里应含 "role":"student"；用返回的 token 调 /api/text2sql/datasources 只应看到 campus
 ```
 
 浏览器端到端：
 
 1. `http://<服务器IP>/` → 用 `admin/admin123` 登录
-2. 左侧会话列表应看到 **4 条**（alice 2 条 + bob 1 条 + admin 1 条）
-3. 退出，用 `alice/alice123` 登录 → 只看到 **2 条**
-4. 用 alice 提问 → SSE 流式返回，不中断（验证 nginx 的 SSE 配置）
-5. 退出，`bob/bob123` → 只看到 **1 条**
+2. 左侧会话列表应看到 **5 条**（student01 2 条 + student02 1 条 + counselor01 1 条 + admin 1 条）
+3. 退出，用 `student01/student123` 登录 → 只看到 **2 条**；提问「我的成绩」只得到本人数据
+4. 用 `student01` 提问「全校平均分」→ 只基于本人数据回答，并说明数据范围
+5. 退出，`counselor01/counselor123` → 可查询 1 班与 2 班数据，看不到 3 班
+6. 管理员打开「数据源权限」页 → 勾选/撤销学生或辅导员的 `campus` 授权，下一次请求立即生效
 
 ---
 
@@ -206,9 +207,10 @@ sudo bash deploy/bootstrap.sh
 关于数据：**MySQL 数据不持久化，会被一起丢掉**。这是有意为之：
 
 - 应用库的所有数据都由 `db/app-schema.sql` + `db/app-data.sql` 在 MySQL 容器**首次初始化**时重建
-- 演示目标库（`demo`）在**同一个 MySQL 实例**里，是独立的 schema，首次连接时由
+- 演示目标库（`campus`）在**同一个 MySQL 实例**里，是独立的 schema，首次连接时由
   `createDatabaseIfNotExist=true` 自动创建；后端每次启动都会用 `db/schema.sql` + `db/data.sql`
   重建并重灌它（`text2sql.datasources.items[].seed: true`），所以演示数据永远是已知状态
+- 连接参数使用 `CAMPUS_DB_JDBC_URL` / `CAMPUS_DB_USERNAME` / `CAMPUS_DB_PASSWORD`
 - 所以恢复后立刻就是可演示状态，不需要备份恢复流程
 
 如果以后需要保留真实数据，再引入独立云盘挂载 `/var/lib/mysql`，或定期 `mysqldump`。
@@ -262,7 +264,7 @@ Docker 构建不受影响（镜像里自带 JDK 25）。
 | `text2sql-frontend/Dockerfile` | `node:22-alpine` 构建 → `nginx:alpine` 托管 |
 | `text2sql-frontend/nginx.conf` | SPA 回退 + `/api` 反代 + SSE 关缓冲 |
 | `docker-compose.yml` | **本地**只用基础设施（MySQL + otel-lgtm），不含应用容器 |
-| `text2sql-backend/src/main/resources/db/app-data.sql` | 种子数据：admin / alice / bob + 会话 |
+| `text2sql-backend/src/main/resources/db/app-data.sql` | 种子数据：admin / student01-03 / counselor01 + 数据范围 + 会话 |
 
 ---
 
@@ -277,7 +279,7 @@ Docker 构建不受影响（镜像里自带 JDK 25）。
 | Docker Compose | 2.40.3（`docker-compose-v2`） |
 | 代码 | `git clone`（仓库已改为 public，`git pull` 可用） |
 | 镜像 | 全部来自华为云 SWR（见 §1.1） |
-| 演示数据源 | `demo`（MySQL schema `demo`，与 app 库同实例，自动创建 + 启动时重灌） |
+| 演示数据源 | `campus`（MySQL schema `campus`，与 app 库同实例，自动创建 + 启动时重灌） |
 | MySQL root 密码 | `root`（`deploy/.env`，mode 600） |
 | JWT 密钥 | 随机生成，未记录、无需人工持有 |
 
@@ -290,11 +292,14 @@ ufw           active，仅放行 22/tcp、80/tcp
 外网访问      http://<服务器IP>/                       -> 200
               http://<服务器IP>/api/text2sql/health     -> 200 OK
 未带 token    GET /api/auth/me                 -> 401
-种子账号      admin  role=admin  可见会话 4 条
-              alice  role=user   可见会话 2 条
-              bob    role=user   可见会话 1 条
-数据范围      alice -> bob 的会话 -> 404（拒绝）
-              admin -> bob 的会话 -> 200（放行）
+种子账号      admin       role=admin      可见会话 5 条
+              student01   role=student    可见会话 2 条
+              student02   role=student    可见会话 1 条
+              counselor01 role=counselor  可见会话 1 条
+数据范围      student01 -> student02 的会话 -> 404（拒绝）
+              admin -> student02 的会话 -> 200（放行）
+行级权限      student01 查询 -> SQL 自动带 student_no/student_id 过滤
+数据源权限    撤销 student 的 campus 授权 -> 下一次查询被拒绝
 ```
 
 > 已知小问题：`bootstrap.sh` 结尾用 `api.ipify.org` 探测公网 IP，但该域名在本网络不可达，
