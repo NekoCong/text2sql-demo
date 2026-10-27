@@ -3,9 +3,11 @@ package com.nekocong.text2sql.web;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nekocong.text2sql.service.ConversationService;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
@@ -22,6 +24,9 @@ class ConversationControllerTest {
 
     @LocalServerPort
     private int port;
+
+    @Autowired
+    private ConversationService conversations;
 
     private WebTestClient client;
     private String token;
@@ -117,5 +122,30 @@ class ConversationControllerTest {
                 .exchange()
                 .expectStatus()
                 .isNotFound();
+    }
+
+    @Test
+    void historyEmbedsRowsAndChartAsRealJson() {
+        String id = createConversation();
+        String userId = TestAuth.currentUserId(client, token);
+        String chart = "{\"type\":\"TABLE\",\"xField\":null,\"yField\":null,\"title\":\"成绩\"}";
+        String rows =
+                "{\"columns\":[{\"name\":\"score\",\"typeName\":\"DOUBLE\"}],"
+                        + "\"rows\":[{\"score\":92.0}],\"rowCount\":1,\"truncated\":false,\"elapsedMs\":3}";
+        conversations.appendAssistantMessage(id, "答案", "SELECT 1", chart, rows).block();
+
+        client.get()
+                .uri("/api/conversations/{id}/messages", id)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$[0].rows.rowCount")
+                .isEqualTo(1)
+                .jsonPath("$[0].rows.rows[0].score")
+                .isEqualTo(92.0)
+                .jsonPath("$[0].chart.type")
+                .isEqualTo("TABLE");
     }
 }

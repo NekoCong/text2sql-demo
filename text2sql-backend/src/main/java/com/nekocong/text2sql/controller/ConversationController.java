@@ -1,6 +1,5 @@
 package com.nekocong.text2sql.controller;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nekocong.text2sql.conversation.ConversationMessage;
 import com.nekocong.text2sql.controller.dto.ConversationMessageView;
@@ -141,12 +140,12 @@ public class ConversationController {
                 message.createdAt());
     }
 
-    private JsonNode parse(String json) {
+    private Object parse(String json) {
         if (json == null || json.isBlank()) {
             return null;
         }
         try {
-            return objectMapper.readTree(json);
+            return objectMapper.readValue(json, Object.class);
         } catch (Exception ex) {
             return null;
         }

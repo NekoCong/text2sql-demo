@@ -77,10 +77,10 @@ function toChatMessage(message: HistoryMessage): ChatMessage {
   if (message.sql) {
     mapped.sql = message.sql
   }
-  if (message.rows) {
+  if (message.rows && Array.isArray(message.rows.columns) && Array.isArray(message.rows.rows)) {
     mapped.rows = message.rows
   }
-  if (message.chart) {
+  if (message.chart && typeof message.chart.type === 'string') {
     mapped.chart = message.chart
   }
   return mapped
