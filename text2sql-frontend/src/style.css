@@ -237,8 +237,8 @@ samp {
 }
 
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 *::-webkit-scrollbar-track {
@@ -247,14 +247,11 @@ samp {
 
 *::-webkit-scrollbar-thumb {
   background: var(--ac-scrollbar);
-  background-clip: content-box;
-  border: 2px solid transparent;
   border-radius: 999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
   background: var(--ac-scrollbar-hover);
-  background-clip: content-box;
 }
 
 /* Keyboard focus stays visible everywhere; pointer focus does not add a ring. */
@@ -411,7 +408,8 @@ samp {
   min-height: 0;
 }
 
-/* Legacy chat padding; the shell provides the page gutter. */
+/* Legacy chat padding: ChatView still owns 16px until the chat workspace
+   restyle (Batch 4), so the shell gutter and this padding stack for now. */
 .chat {
   height: 100%;
   padding: var(--ac-space-16);

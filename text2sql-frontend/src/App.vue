@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowDown, Expand, Fold, User } from '@element-plus/icons-vue'
 import ConversationSidebar from '@/components/ConversationSidebar.vue'
@@ -29,6 +30,10 @@ const isNarrow = ref(narrowQuery.matches)
 /** Off-canvas visibility. The panel starts closed on narrow viewports. */
 const mobileOpen = ref(false)
 
+/** Template refs used for the off-canvas focus handoff. */
+const asideRef = ref<ComponentPublicInstance | null>(null)
+const collapseButtonRef = ref<ComponentPublicInstance | null>(null)
+
 /** True when the sidebar is on screen, whichever layout mode is active. */
 const sidebarVisible = computed(() => (isNarrow.value ? mobileOpen.value : !collapsed.value))
 
@@ -37,24 +42,65 @@ const sidebarToggleLabel = computed(() =>
   sidebarVisible.value ? '收起对话历史' : '展开对话历史',
 )
 
+/** Selector for the first control the off-canvas panel should focus. */
+const FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  'a[href]',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+/** Moves focus back to the header control that owns the panel. */
+function focusSidebarToggle(): void {
+  const toggle = collapseButtonRef.value?.$el
+  if (toggle instanceof HTMLElement) {
+    toggle.focus()
+  }
+}
+
+/** Opens the panel and puts focus on its first control ("新建对话"). */
+async function openMobileSidebar(): Promise<void> {
+  mobileOpen.value = true
+  await nextTick()
+  const panel = asideRef.value?.$el
+  if (panel instanceof HTMLElement) {
+    panel.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus()
+  }
+}
+
+/**
+ * The single dismissal path for the off-canvas panel: backdrop, Escape, route
+ * changes and conversation selection all land here so focus returns to the
+ * collapse control.
+ */
+async function closeMobileSidebar(): Promise<void> {
+  if (!mobileOpen.value) {
+    return
+  }
+  mobileOpen.value = false
+  await nextTick()
+  focusSidebarToggle()
+}
+
 /** One control drives both the desktop collapse and the off-canvas panel. */
 function toggleSidebar(): void {
   if (isNarrow.value) {
-    mobileOpen.value = !mobileOpen.value
+    if (mobileOpen.value) {
+      void closeMobileSidebar()
+      return
+    }
+    void openMobileSidebar()
     return
   }
   collapsed.value = !collapsed.value
 }
 
-/** Closes the off-canvas panel from the backdrop. */
-function closeMobileSidebar(): void {
-  mobileOpen.value = false
-}
-
 /** Escape dismisses the off-canvas panel. */
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape' && mobileOpen.value) {
-    mobileOpen.value = false
+    void closeMobileSidebar()
   }
 }
 
@@ -80,14 +126,14 @@ onBeforeUnmount(() => {
 watch(
   () => route.fullPath,
   () => {
-    mobileOpen.value = false
+    void closeMobileSidebar()
   },
 )
 
 /** The panel cannot stay open once the chat sidebar is no longer rendered. */
 watch(showSidebar, (visible) => {
   if (!visible) {
-    mobileOpen.value = false
+    void closeMobileSidebar()
   }
 })
 
@@ -108,7 +154,7 @@ async function onUserCommand(command: string | number | object): Promise<void> {
 
 /** Selecting a conversation always returns to the chat screen. */
 function onConversationSelect(): void {
-  mobileOpen.value = false
+  void closeMobileSidebar()
   if (route.name !== 'chat') {
     void router.push('/')
   }
@@ -146,6 +192,7 @@ watch(
 
       <el-button
         v-if="showSidebar"
+        ref="collapseButtonRef"
         class="layout__collapse"
         text
         :icon="sidebarVisible ? Fold : Expand"
@@ -197,6 +244,7 @@ watch(
       <el-aside
         v-if="showSidebar"
         id="conversation-sidebar"
+        ref="asideRef"
         class="layout__aside"
         :class="{
           'layout__aside--collapsed': !isNarrow && collapsed,
@@ -279,7 +327,7 @@ watch(
 .layout__brand-name {
   color: var(--ac-ink);
   font-family: var(--ac-font-serif);
-  font-size: var(--ac-text-title);
+  font-size: var(--ac-text-hero);
   font-weight: 600;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -398,7 +446,7 @@ watch(
     visibility 0.2s ease;
 }
 
-.layout__aside--collapsed {
+.layout__aside.layout__aside--collapsed {
   width: 0;
   border-right: none;
 }
@@ -478,6 +526,13 @@ watch(
 
 /* ---------- Responsive --------------------------------------------------- */
 
+/* The wordmark steps down so the nav and account menu fit from tablet down. */
+@media (max-width: 1199px) {
+  .layout__brand-name {
+    font-size: var(--ac-text-title);
+  }
+}
+
 @media (max-width: 1199px) and (min-width: 768px) {
   .layout__aside {
     width: var(--ac-sidebar-width-md);
@@ -505,10 +560,6 @@ watch(
     width: 32px;
     height: 32px;
     font-size: 11px;
-  }
-
-  .layout__brand-name {
-    font-size: 16px;
   }
 
   .layout__menu {

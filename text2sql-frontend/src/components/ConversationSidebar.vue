@@ -113,30 +113,32 @@ async function onDelete(item: Conversation): Promise<void> {
           :key="item.id"
           class="conv"
           :class="{ 'conv--active': item.id === conversation.activeId }"
-          role="button"
-          tabindex="0"
-          :aria-current="item.id === conversation.activeId ? 'true' : undefined"
-          @click="onSelect(item)"
-          @keydown.enter.self.prevent="onSelect(item)"
-          @keydown.space.self.prevent="onSelect(item)"
         >
-          <el-icon class="conv__icon"><ChatDotRound /></el-icon>
-
-          <el-input
-            v-if="renamingId === item.id"
-            :ref="setRenameInput"
-            v-model="renameDraft"
-            class="conv__input"
-            size="small"
-            maxlength="64"
-            @click.stop
-            @keydown.enter="commitRename(item)"
-            @keydown.esc="cancelRename"
-            @blur="commitRename(item)"
-          />
+          <template v-if="renamingId === item.id">
+            <el-icon class="conv__icon"><ChatDotRound /></el-icon>
+            <el-input
+              :ref="setRenameInput"
+              v-model="renameDraft"
+              class="conv__input"
+              size="small"
+              maxlength="64"
+              @click.stop
+              @keydown.enter="commitRename(item)"
+              @keydown.esc.stop="cancelRename"
+              @blur="commitRename(item)"
+            />
+          </template>
 
           <template v-else>
-            <span class="conv__title" :title="item.title">{{ item.title }}</span>
+            <button
+              type="button"
+              class="conv__select"
+              :aria-current="item.id === conversation.activeId ? 'true' : undefined"
+              @click="onSelect(item)"
+            >
+              <el-icon class="conv__icon"><ChatDotRound /></el-icon>
+              <span class="conv__title" :title="item.title">{{ item.title }}</span>
+            </button>
             <span class="conv__actions">
               <button
                 type="button"
@@ -245,7 +247,7 @@ async function onDelete(item: Conversation): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--ac-space-8);
-  padding: var(--ac-space-8) var(--ac-space-8) var(--ac-space-8) var(--ac-space-12);
+  padding: 0 var(--ac-space-8) 0 var(--ac-space-12);
   color: var(--ac-text);
   font-size: var(--ac-text-body);
   line-height: var(--ac-line-height-control);
@@ -263,7 +265,24 @@ async function onDelete(item: Conversation): Promise<void> {
   background: var(--ac-fill-soft);
 }
 
-.conv:focus-visible {
+/* The row is a container; the label is the real (single) select control. */
+.conv__select {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--ac-space-8);
+  min-width: 0;
+  padding: var(--ac-space-8) 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--ac-radius-sm);
+}
+
+.conv__select:focus-visible {
   outline: 2px solid var(--ac-primary);
   outline-offset: -2px;
 }
@@ -345,5 +364,6 @@ async function onDelete(item: Conversation): Promise<void> {
 .conv__input {
   flex: 1;
   min-width: 0;
+  margin: var(--ac-space-4) 0;
 }
 </style>
