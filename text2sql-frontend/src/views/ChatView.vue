@@ -14,6 +14,7 @@ import type {
   QueryResult,
   ChatStep,
 } from '@/types'
+import { copyText } from '@/utils/clipboard'
 import { parseSegments } from '@/utils/markdown'
 
 const chat = useChatStore()
@@ -206,11 +207,10 @@ async function copySql(message: ChatMessage): Promise<void> {
   if (!sql) {
     return
   }
-  try {
-    await navigator.clipboard.writeText(sql)
+  if (await copyText(sql)) {
     ElMessage.success('SQL 已复制')
-  } catch {
-    ElMessage.error('复制失败')
+  } else {
+    ElMessage.error('复制失败，请手动选中 SQL 复制')
   }
 }
 
