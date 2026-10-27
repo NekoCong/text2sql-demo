@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { nextTick, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Avatar, Lock, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -19,6 +19,27 @@ interface RegisterForm {
   password: string
   confirmPassword: string
 }
+
+/** A seeded demo account shown on the login tab. */
+interface DemoAccount {
+  username: string
+  password: string
+  name: string
+  roleLabel: string
+  roleKey: 'admin' | 'counselor' | 'student'
+}
+
+/**
+ * Demo accounts seeded by `db/app-data.sql`. They are intentionally public:
+ * this screen is the demo entry point, not a production credential store.
+ */
+const demoAccounts: DemoAccount[] = [
+  { username: 'admin', password: 'admin123', name: '系统管理员', roleLabel: '管理员', roleKey: 'admin' },
+  { username: 'counselor01', password: 'counselor123', name: '李辅导员', roleLabel: '辅导员', roleKey: 'counselor' },
+  { username: 'student01', password: 'student123', name: '张伟', roleLabel: '学生', roleKey: 'student' },
+  { username: 'student02', password: 'student123', name: '李娜', roleLabel: '学生', roleKey: 'student' },
+  { username: 'student03', password: 'student123', name: '王强', roleLabel: '学生', roleKey: 'student' },
+]
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -110,6 +131,16 @@ async function submitRegister(): Promise<void> {
     loading.value = false
   }
 }
+
+/** Fills the login form with a seeded demo account and clears stale errors. */
+function fillDemoAccount(account: DemoAccount): void {
+  activeTab.value = 'login'
+  loginForm.username = account.username
+  loginForm.password = account.password
+  void nextTick(() => {
+    loginFormRef.value?.clearValidate()
+  })
+}
 </script>
 
 <template>
@@ -186,6 +217,24 @@ async function submitRegister(): Promise<void> {
                 登录
               </el-button>
             </el-form>
+
+            <section class="demo" aria-label="演示账号">
+              <div class="demo__head">
+                <span class="demo__title">演示账号</span>
+                <span class="demo__hint">仅用于演示环境 · 点击自动填入</span>
+              </div>
+              <ul class="demo__list">
+                <li v-for="account in demoAccounts" :key="account.username">
+                  <button type="button" class="demo__item" @click="fillDemoAccount(account)">
+                    <span class="demo__role" :class="`demo__role--${account.roleKey}`">
+                      {{ account.roleLabel }}
+                    </span>
+                    <span class="demo__name">{{ account.name }}</span>
+                    <span class="demo__cred">{{ account.username }} / {{ account.password }}</span>
+                  </button>
+                </li>
+              </ul>
+            </section>
           </el-tab-pane>
 
           <el-tab-pane label="注册" name="register">
@@ -463,6 +512,104 @@ async function submitRegister(): Promise<void> {
 .login__submit {
   width: 100%;
   margin-top: var(--ac-space-8);
+}
+
+/* ---------- Demo accounts ------------------------------------------------ */
+
+.demo {
+  margin-top: var(--ac-space-24);
+  padding-top: var(--ac-space-16);
+  border-top: 1px dashed var(--ac-border);
+}
+
+.demo__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ac-space-4) var(--ac-space-12);
+}
+
+.demo__title {
+  color: var(--ac-text);
+  font-size: var(--ac-text-meta);
+  font-weight: 600;
+}
+
+.demo__hint {
+  color: var(--ac-muted);
+  font-size: var(--ac-text-meta);
+}
+
+.demo__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: var(--ac-space-8) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.demo__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  width: 100%;
+  padding: 8px 10px;
+  color: var(--ac-text);
+  font: inherit;
+  text-align: left;
+  background: var(--ac-fill-soft);
+  border: 1px solid transparent;
+  border-radius: var(--ac-radius-sm);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.demo__item:hover {
+  background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-7);
+}
+
+.demo__item:focus-visible {
+  outline: 2px solid var(--el-color-primary-light-5);
+  outline-offset: 2px;
+}
+
+.demo__role {
+  flex: none;
+  padding: 1px 7px;
+  color: var(--el-color-primary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  background: var(--el-color-primary-light-9);
+  border-radius: 999px;
+}
+
+.demo__role--counselor {
+  color: var(--el-color-success);
+  background: var(--el-color-success-light-9);
+}
+
+.demo__role--student {
+  color: var(--ac-muted);
+  background: var(--el-fill-color-light);
+}
+
+.demo__name {
+  flex: 0 1 auto;
+  font-weight: 600;
+}
+
+.demo__cred {
+  margin-left: auto;
+  color: var(--ac-muted);
+  font-family: var(--ac-font-mono);
+  font-size: var(--ac-text-meta);
 }
 
 /* ---------- Compact brand header (< 900px) ------------------------------- */
