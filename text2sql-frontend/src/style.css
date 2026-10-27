@@ -444,9 +444,9 @@ samp {
   line-height: var(--ac-line-height-control);
 }
 
-.ac-table-wrapper .el-table .el-table__row--striped > td.el-table__cell {
-  background: var(--ac-fill-soft);
-}
+/* Zebra rows are left to Element Plus: its striped rule is more specific than
+   anything scoped to this wrapper, and it paints with --el-fill-color-lighter,
+   which the token block already maps to the Academic Clarity soft fill. */
 
 .ac-table-wrapper .el-table .el-table__row:hover > td.el-table__cell,
 .ac-table-wrapper .el-table .el-table__row--striped:hover > td.el-table__cell {
@@ -472,11 +472,11 @@ samp {
   font-weight: 600;
 }
 
+/* Keep Element Plus's 48px hit area and only inset it from the dialog edge;
+   the global focus ring needs room inside the clipped dialog surface. */
 .ac-dialog .el-dialog__headerbtn {
-  top: var(--ac-space-16);
-  right: var(--ac-space-16);
-  width: 32px;
-  height: 32px;
+  top: var(--ac-space-8);
+  right: var(--ac-space-8);
 }
 
 .ac-dialog .el-dialog__body {
