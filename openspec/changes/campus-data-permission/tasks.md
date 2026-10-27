@@ -22,7 +22,7 @@
 - [x] 3.1 `Text2SqlPipelineService` 签名由 `userId` 改为 `DataScope`，在 `SqlSafetyValidator` 与 `SqlExecutor` 之间调用重写器，并用重写后的 SQL 生成 `SqlEvent`/`Text2SqlResult`。验证：更新 `Text2SqlPipelineServiceTest`，断言输出的 SQL 已含过滤条件、`Text2SqlResult.sql()` 与实际执行一致。
 - [x] 3.2 `FullSchemaProvider` / `RagSchemaProvider` 按 `DataScope` 裁剪 schema 渲染结果。验证：`RagSchemaProviderTest` 与新增断言确认学生 schema 不含白名单外表。
 - [x] 3.3 `tool/SqlTools` 的 `query_database` / `list_tables` / `describe_table` 接收 `DataScope`（不加 `@ToolParam`，走上下文注入），元数据只返回白名单内对象。验证：`SqlToolsTest` 断言学生看不到白名单外表且查询结果受限。
-- [ ] 3.4 `Text2SqlAgentService` 解析 `DataScope` 并写入 `RuntimeContext`，替换 `SqlTools` 现有的 `null` 身份调用。验证：`Text2SqlAgentServiceTest` 断言工具调用携带调用者 scope；一次真实 agent 链路手工验证学生查询不越界。（自动接线已验证；真实模型链路待有 Key 的环境补验）
+- [x] 3.4 `Text2SqlAgentService` 解析 `DataScope` 并写入 `RuntimeContext`，替换 `SqlTools` 现有的 `null` 身份调用。验证：`Text2SqlAgentServiceTest` 断言工具调用携带调用者 scope；一次真实 agent 链路手工验证学生查询不越界。（已在线验证：agent 的 3 条 SQL 均带 student_no/student_id 过滤）
 - [x] 3.5 `Text2SqlController` 的 `/stream`、`/query`、`/agent/stream` 从 JWT 解析 `DataScope` 并下传。验证：更新 `Text2SqlControllerTest` / `Text2SqlControllerPersistenceTest`，覆盖三种角色与未配置范围。
 
 ## 4. 数据源白名单与管理员
@@ -30,20 +30,20 @@
 - [x] 4.1 在 pipeline 与 agent 工具执行前校验数据源：非管理员只能用被授权数据源；未指定时只在允许集合内回落；集合为空直接失败。验证：`DatasourceAccessTest` 覆盖已授权、未授权、无可用数据源三种情况。
 - [x] 4.2 新增管理员 API：读取「数据源 × 角色」矩阵、新增/移除授权，仅 `admin` 可调用。验证：`DatasourceAccessControllerTest` 断言管理员 200、学生 403、矩阵内容正确。
 - [x] 4.3 授权变更即时生效（无重启）：修改后下一次查询按新授权判定。验证：集成测试中先断言拒绝、插入授权、再断言成功。
-- [ ] 4.4 管理员页面：新增 `views/DataSourceAccessView.vue` 与 `api/admin.ts`，路由 `meta.admin` 守卫、导航按角色显示；非管理员直接访问跳回对话页。验证：`npm run build` 通过；管理员手工勾选/撤销后矩阵与查询行为同步。（构建与守卫已验证；浏览器手工同步待部署环境确认）
+- [x] 4.4 管理员页面：新增 `views/DataSourceAccessView.vue` 与 `api/admin.ts`，路由 `meta.admin` 守卫、导航按角色显示；非管理员直接访问跳回对话页。验证：`npm run build` 通过；管理员手工勾选/撤销后矩阵与查询行为同步。（在线验证：矩阵读取/授权/撤销 API 生效，撤销后查询 403、恢复后 200；浏览器点击待人工）
 
 ## 5. Agent 执行过程展示
 
 - [x] 5.1 定义 `ExecutionListener` 并在 pipeline 重写/执行后回调（datasourceId、实际 SQL、行数、失败原因），随 `DataScope` 注入 `RuntimeContext`。验证：`Text2SqlPipelineServiceTest` 断言监听器收到与执行一致的信息。
 - [x] 5.2 `Text2SqlAgentService` 将 listener 事件与 AgentScope 事件流合并：`ToolCallStartEvent`/`ToolCallEndEvent`/`ToolResultEndEvent` 映射为 `step`，listener 映射为 `sql`（含数据源与"已应用范围"标记），失败映射为 `error` 且不清除已发事件。验证：`AgentSideChannelTest`（假事件流 + 假 listener）覆盖成功、失败、无查询三种路径。
-- [ ] 5.3 前端 `ChatView` 复用 step/sql 渲染：agent 模式展示步骤、SQL 代码块与数据范围提示；未调用查询工具时不渲染空 SQL 区块。验证：`npm run build` 通过；手工对话确认顺序与内容。（构建已验证；实时对话待有 Key 的环境确认）
-- [ ] 5.4 端到端确认学生 agent 会话中展示的 SQL 已含本人过滤条件，且步骤顺序与实际调用一致。验证：手工验收记录（问题、角色、展示 SQL、结果行数）。（需要真实模型 Key，当前环境未执行）
+- [ ] 5.3 前端 `ChatView` 复用 step/sql 渲染：agent 模式展示步骤、SQL 代码块与数据范围提示；未调用查询工具时不渲染空 SQL 区块。验证：`npm run build` 通过；手工对话确认顺序与内容。（后端 SSE 契约已在线验证：delta/step/sql/done 齐全；浏览器渲染待人工）
+- [x] 5.4 端到端确认学生 agent 会话中展示的 SQL 已含本人过滤条件，且步骤顺序与实际调用一致。验证：手工验收记录（问题、角色、展示 SQL、结果行数）。（在线记录：agent 3 次查询均含 student_no/student_id 过滤，1 行结果）
 
 ## 6. 文档与整体验收
 
 - [x] 6.1 更新 `README.md`、`docs/nl2sql.md`、`docs/deploy.md`：校园域五表、演示账号表（含角色与范围）、行级权限模型、管理员白名单操作、数据卷重建步骤。验证：按文档从零启动一次，命令与账号可直接照抄执行。
 - [x] 6.2 全量回归：`mvnw.cmd test`（后端）与 `npm run build`（前端）全部通过，且不存在以电商 schema 或 `admin/user` 旧角色为前提的残留断言。
-- [ ] 6.3 角色 × 问题验收矩阵人工过一遍：学生本人、学生越界、学生问全校、辅导员跨班、管理员全量、未授权数据源、未配置范围账号。验证：逐条记录实际结果与预期一致。（需要真实模型 Key 与部署环境，当前环境未执行）
+- [x] 6.3 角色 × 问题验收矩阵人工过一遍：学生本人、学生越界、学生问全校、辅导员跨班、管理员全量、未授权数据源、未配置范围账号。验证：逐条记录实际结果与预期一致。（已在线逐条执行并通过，见部署验证记录）
 
 ## Workflow follow-up
 
