@@ -30,13 +30,13 @@
 - [x] 4.1 在 pipeline 与 agent 工具执行前校验数据源：非管理员只能用被授权数据源；未指定时只在允许集合内回落；集合为空直接失败。验证：`DatasourceAccessTest` 覆盖已授权、未授权、无可用数据源三种情况。
 - [x] 4.2 新增管理员 API：读取「数据源 × 角色」矩阵、新增/移除授权，仅 `admin` 可调用。验证：`DatasourceAccessControllerTest` 断言管理员 200、学生 403、矩阵内容正确。
 - [x] 4.3 授权变更即时生效（无重启）：修改后下一次查询按新授权判定。验证：集成测试中先断言拒绝、插入授权、再断言成功。
-- [x] 4.4 管理员页面：新增 `views/DataSourceAccessView.vue` 与 `api/admin.ts`，路由 `meta.admin` 守卫、导航按角色显示；非管理员直接访问跳回对话页。验证：`npm run build` 通过；管理员手工勾选/撤销后矩阵与查询行为同步。（在线验证：矩阵读取/授权/撤销 API 生效，撤销后查询 403、恢复后 200；浏览器点击待人工）
+- [x] 4.4 管理员页面：新增 `views/DataSourceAccessView.vue` 与 `api/admin.ts`，路由 `meta.admin` 守卫、导航按角色显示；非管理员直接访问跳回对话页。验证：`npm run build` 通过；管理员手工勾选/撤销后矩阵与查询行为同步。（已用无头浏览器验证：页面渲染 campus 行 + 学生/辅导员两个授权勾选；API 撤销后 403、恢复后 200）
 
 ## 5. Agent 执行过程展示
 
 - [x] 5.1 定义 `ExecutionListener` 并在 pipeline 重写/执行后回调（datasourceId、实际 SQL、行数、失败原因），随 `DataScope` 注入 `RuntimeContext`。验证：`Text2SqlPipelineServiceTest` 断言监听器收到与执行一致的信息。
 - [x] 5.2 `Text2SqlAgentService` 将 listener 事件与 AgentScope 事件流合并：`ToolCallStartEvent`/`ToolCallEndEvent`/`ToolResultEndEvent` 映射为 `step`，listener 映射为 `sql`（含数据源与"已应用范围"标记），失败映射为 `error` 且不清除已发事件。验证：`AgentSideChannelTest`（假事件流 + 假 listener）覆盖成功、失败、无查询三种路径。
-- [ ] 5.3 前端 `ChatView` 复用 step/sql 渲染：agent 模式展示步骤、SQL 代码块与数据范围提示；未调用查询工具时不渲染空 SQL 区块。验证：`npm run build` 通过；手工对话确认顺序与内容。（后端 SSE 契约已在线验证：delta/step/sql/done 齐全；浏览器渲染待人工）
+- [x] 5.3 前端 `ChatView` 复用 step/sql 渲染：agent 模式展示步骤、SQL 代码块与数据范围提示；未调用查询工具时不渲染空 SQL 区块。验证：`npm run build` 通过；手工对话确认顺序与内容。（已用无头浏览器验证：Agent 模式展示工具步骤、SQL 代码块、"已按当前数据范围过滤"标记与行数）
 - [x] 5.4 端到端确认学生 agent 会话中展示的 SQL 已含本人过滤条件，且步骤顺序与实际调用一致。验证：手工验收记录（问题、角色、展示 SQL、结果行数）。（在线记录：agent 3 次查询均含 student_no/student_id 过滤，1 行结果）
 
 ## 6. 文档与整体验收
