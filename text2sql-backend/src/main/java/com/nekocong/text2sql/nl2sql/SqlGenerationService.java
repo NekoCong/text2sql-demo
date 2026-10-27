@@ -43,13 +43,16 @@ public class SqlGenerationService {
      * @param dialect the SQL dialect name
      * @param schema the prompt-ready schema DDL
      * @param question the natural-language question
+     * @param callerContext a short description of who is asking and what they may see
      * @return a mono emitting the parsed generation
      */
-    public Mono<SqlGeneration> generate(Model model, String dialect, String schema, String question) {
+    public Mono<SqlGeneration> generate(
+            Model model, String dialect, String schema, String question, String callerContext) {
         List<Msg> messages =
                 List.of(
                         new SystemMessage(promptAssembler.systemPrompt(dialect)),
-                        new UserMessage(promptAssembler.userPrompt(schema, question, dialect)));
+                        new UserMessage(
+                                promptAssembler.userPrompt(schema, question, dialect, callerContext)));
         GenerateOptions options = GenerateOptions.builder().temperature(0.0).build();
         return model.stream(messages, List.of(), options)
                 .map(SqlGenerationService::textOf)

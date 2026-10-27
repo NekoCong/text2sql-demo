@@ -7,7 +7,9 @@ import org.springframework.stereotype.Component;
 /**
  * Builds the system/user prompts that turn a schema + question into a JSON SQL response.
  *
- * <p>Templates live in {@code resources/prompts/} and are rendered by {@link PromptCatalog}.
+ * <p>Templates live in {@code resources/prompts/} and are rendered by {@link PromptCatalog}. The
+ * caller context is passed to the model so first-person questions ("我的成绩") can be resolved to
+ * the caller's own identifiers instead of being guessed from the question text.
  */
 @Component
 public class PromptAssembler {
@@ -37,14 +39,21 @@ public class PromptAssembler {
     }
 
     /**
-     * The user prompt carrying the schema and the question.
+     * The user prompt carrying the schema, the caller context and the question.
      *
      * @param schema the prompt-ready schema DDL
      * @param question the natural-language question
      * @param dialect the SQL dialect name
+     * @param callerContext a short description of who is asking and what they may see
      * @return the user prompt
      */
-    public String userPrompt(String schema, String question, String dialect) {
-        return prompts.render(USER_LOCATION, Map.of("schema", schema, "question", question, "dialect", dialect));
+    public String userPrompt(String schema, String question, String dialect, String callerContext) {
+        return prompts.render(
+                USER_LOCATION,
+                Map.of(
+                        "schema", schema,
+                        "question", question,
+                        "dialect", dialect,
+                        "caller", callerContext == null ? "" : callerContext));
     }
 }

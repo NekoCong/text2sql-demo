@@ -14,9 +14,9 @@
 SET NAMES utf8mb4;
 
 INSERT IGNORE INTO class (id, name, grade, head_teacher) VALUES
-    (1, '高一(1)班', '2023', '王老师'),
-    (2, '高一(2)班', '2023', '李老师'),
-    (3, '高二(3)班', '2022', '张老师');
+    (1, '1班', '2023', '王老师'),
+    (2, '2班', '2023', '李老师'),
+    (3, '3班', '2022', '张老师');
 
 INSERT IGNORE INTO course (id, code, name, credits) VALUES
     (1, 'CHN101', '语文', 3.0),

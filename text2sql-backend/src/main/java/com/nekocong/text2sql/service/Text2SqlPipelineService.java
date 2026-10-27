@@ -106,7 +106,7 @@ public class Text2SqlPipelineService {
                     String id = resolveId(scope, datasourceId);
                     String dialect = dialectOf(id);
                     return Mono.zip(schema(id, scope, question), modelResolver.resolve(scope.userId()))
-                            .flatMap(pair -> generationService.generate(pair.getT2(), dialect, pair.getT1(), question))
+                            .flatMap(pair -> generationService.generate(pair.getT2(), dialect, pair.getT1(), question, callerContext(scope)))
                             .flatMap(generation -> execute(id, dialect, generation, scope, listener));
                 })
                 .doOnError(error -> listener.onFailure(null, errorMessage(error)));
@@ -174,7 +174,12 @@ public class Text2SqlPipelineService {
                                                             Flux.concat(
                                                                     Flux.just(new StepEvent("generate", "调用模型生成 SQL")),
                                                                     generationService
-                                                                            .generate(pair.getT2(), dialect, pair.getT1(), question)
+                                                                            .generate(
+                                                                                    pair.getT2(),
+                                                                                    dialect,
+                                                                                    pair.getT1(),
+                                                                                    question,
+                                                                                    callerContext(scope))
                                                                             .flatMapMany(
                                                                                     gen -> toEvents(id, dialect, gen, scope, listener)))));
                 })
@@ -248,6 +253,28 @@ public class Text2SqlPipelineService {
         String scopeText = scope.isStudent() ? "仅本人" : "所管班级";
         String note = "结果已按当前账号的数据范围（" + scopeText + "）过滤";
         return (explanation == null || explanation.isBlank()) ? note : explanation + "（" + note + "）";
+    }
+
+    /**
+     * Describes the caller to the generation model, so first-person questions resolve to the
+     * caller's own identifiers instead of being guessed from the question text.
+     */
+    private static String callerContext(DataScope scope) {
+        if (scope.isAdmin()) {
+            return "管理员：可见全部数据，不需要按调用者过滤。";
+        }
+        if (scope.isStudent()) {
+            return "学生：本人学号 "
+                    + scope.studentNo()
+                    + "，所属班级 id "
+                    + scope.classIds().stream().sorted().toList()
+                    + "。问题中的“我/我的”指该学生本人，用 student_no = '"
+                    + scope.studentNo()
+                    + "' 过滤。";
+        }
+        return "辅导员：管理班级 id "
+                + scope.classIds().stream().sorted().toList()
+                + "。问题中的“我管理的班/本班”指这些班级，用 class_id IN (...) 过滤。";
     }
 
     private Mono<String> schema(String id, DataScope scope, String question) {

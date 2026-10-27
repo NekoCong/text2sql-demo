@@ -24,8 +24,11 @@ class PromptCatalogTest {
 
     @Test
     void rendersUserPromptWithPlaceholders() {
-        String prompt = assembler.userPrompt("CREATE TABLE t (id INT)", "统计订单数量", "MYSQL");
+        String prompt =
+                assembler.userPrompt(
+                        "CREATE TABLE t (id INT)", "统计订单数量", "MYSQL", "管理员：可见全部数据。");
         assertThat(prompt).contains("CREATE TABLE t (id INT)").contains("统计订单数量").contains("MYSQL");
+        assertThat(prompt).contains("管理员：可见全部数据。");
         assertThat(prompt).doesNotContain("{{");
     }
 

@@ -80,7 +80,11 @@ class Text2SqlPipelineServiceTest {
                 new SqlGenerationService(new PromptAssembler(new PromptCatalog()), new SqlResultParser(new ObjectMapper())) {
                     @Override
                     public Mono<SqlGeneration> generate(
-                            Model model, String dialect, String schema, String question) {
+                            Model model,
+                            String dialect,
+                            String schema,
+                            String question,
+                            String callerContext) {
                         return Mono.just(new SqlGeneration(sql, explanation));
                     }
                 };
