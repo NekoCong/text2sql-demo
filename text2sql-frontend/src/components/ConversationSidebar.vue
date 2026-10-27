@@ -247,7 +247,7 @@ async function onDelete(item: Conversation): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--ac-space-8);
-  padding: 0 var(--ac-space-8) 0 var(--ac-space-12);
+  padding: 0 var(--ac-space-8) 0 0;
   color: var(--ac-text);
   font-size: var(--ac-text-body);
   line-height: var(--ac-line-height-control);
@@ -272,7 +272,7 @@ async function onDelete(item: Conversation): Promise<void> {
   align-items: center;
   gap: var(--ac-space-8);
   min-width: 0;
-  padding: var(--ac-space-8) 0;
+  padding: var(--ac-space-8) 0 var(--ac-space-8) var(--ac-space-12);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -364,6 +364,6 @@ async function onDelete(item: Conversation): Promise<void> {
 .conv__input {
   flex: 1;
   min-width: 0;
-  margin: var(--ac-space-4) 0;
+  margin: var(--ac-space-4) 0 var(--ac-space-4) var(--ac-space-12);
 }
 </style>
