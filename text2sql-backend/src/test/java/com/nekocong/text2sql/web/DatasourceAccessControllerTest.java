@@ -114,6 +114,31 @@ class DatasourceAccessControllerTest {
     }
 
     @Test
+    void revokedDatasourceMakesTheSyncQueryReturn403() {
+        String username = "student" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        AppUser user =
+                users.insert(username, passwordEncoder.encode("secret123"), "Student", Roles.STUDENT).block();
+        insertScope(user.id(), "class_id", "1");
+        insertScope(user.id(), "student_id", "1");
+        insertScope(user.id(), "student_no", "2023001");
+        String token = TestAuth.login(client, username, "secret123");
+
+        revoke("student", "campus", adminToken);
+
+        client.post()
+                .uri("/api/text2sql/query")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue("{\"message\":\"我的成绩\"}")
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.message")
+                .exists();
+    }
+
+    @Test
     void unknownRoleOrDatasourceIsRejected() {
         client.put()
                 .uri("/api/admin/datasource-access/teacher/campus")
