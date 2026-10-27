@@ -40,10 +40,26 @@
   --ac-chart-5: #4b8bbe;
   --ac-chart-6: #94a3b8;
 
-  /* Code / SQL surface (chat workspace) ------------------------------------ */
+  /* Code / SQL surface (chat workspace) ------------------------------------
+     A fixed ink surface: its text and overlay colours are bound to that dark
+     background, so they live here instead of being sprinkled through the view. */
   --ac-code-surface: #0f172a;
   --ac-code-text: #d6e2f0;
   --ac-code-muted: #94a3b8;
+  --ac-code-rule: rgba(255, 255, 255, 0.08); /* hairlines and quiet pill fills */
+  --ac-code-wash: rgba(255, 255, 255, 0.12); /* hover wash on the ink surface */
+  --ac-code-wash-strong: rgba(255, 255, 255, 0.18); /* pressed wash */
+  --ac-code-accent: #8fe3d8; /* teal label on ink */
+  --ac-code-accent-wash: rgba(15, 157, 138, 0.18);
+
+  /* Brand panel (login) ----------------------------------------------------
+     A fixed deep-blue surface; the overlay alphas below are bound to it. */
+  --ac-brand-text: rgba(255, 255, 255, 0.85);
+  --ac-brand-rule: rgba(255, 255, 255, 0.18);
+  --ac-brand-glow: rgba(255, 255, 255, 0.16);
+  --ac-brand-grid: rgba(255, 255, 255, 0.08);
+  --ac-brand-shade: rgba(6, 20, 40, 0.38);
+  --ac-brand-mark-shadow: 0 4px 12px rgba(6, 20, 40, 0.18);
 
   /* Radii, elevation ------------------------------------------------------- */
   --ac-radius: 10px;

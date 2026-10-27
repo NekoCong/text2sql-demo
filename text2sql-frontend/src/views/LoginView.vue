@@ -63,6 +63,9 @@ const registerRules: FormRules<RegisterForm> = {
 
 /** Signs in and lands on the chat page. */
 async function submitLogin(): Promise<void> {
+  if (loading.value) {
+    return
+  }
   const valid = await loginFormRef.value?.validate().catch(() => false)
   if (!valid) {
     return
@@ -81,6 +84,9 @@ async function submitLogin(): Promise<void> {
 
 /** Registers an account; the backend signs it in right away. */
 async function submitRegister(): Promise<void> {
+  if (loading.value) {
+    return
+  }
   const valid = await registerFormRef.value?.validate().catch(() => false)
   if (!valid) {
     return
@@ -174,8 +180,8 @@ async function submitRegister(): Promise<void> {
                 class="login__submit"
                 type="primary"
                 size="large"
+                native-type="submit"
                 :loading="loading"
-                @click="submitLogin"
               >
                 登录
               </el-button>
@@ -246,8 +252,8 @@ async function submitRegister(): Promise<void> {
                 class="login__submit"
                 type="primary"
                 size="large"
+                native-type="submit"
                 :loading="loading"
-                @click="submitRegister"
               >
                 注册
               </el-button>
@@ -292,8 +298,8 @@ async function submitRegister(): Promise<void> {
   padding: var(--ac-space-40) var(--ac-space-32);
   overflow: hidden;
   background:
-    radial-gradient(120% 90% at 100% 0%, rgba(255, 255, 255, 0.16), transparent 58%),
-    linear-gradient(160deg, rgba(6, 20, 40, 0) 34%, rgba(6, 20, 40, 0.38) 100%),
+    radial-gradient(120% 90% at 100% 0%, var(--ac-brand-glow), transparent 58%),
+    linear-gradient(160deg, transparent 34%, var(--ac-brand-shade) 100%),
     linear-gradient(150deg, var(--ac-primary) 0%, var(--ac-primary-pressed) 100%);
 }
 
@@ -303,10 +309,11 @@ async function submitRegister(): Promise<void> {
   inset: 0;
   content: '';
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    linear-gradient(to right, var(--ac-brand-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--ac-brand-grid) 1px, transparent 1px);
   background-size: 28px 28px;
-  mask-image: linear-gradient(158deg, rgba(0, 0, 0, 1), rgba(0, 0, 0, 0) 76%);
+  -webkit-mask-image: linear-gradient(158deg, #000, transparent 76%);
+  mask-image: linear-gradient(158deg, #000, transparent 76%);
   pointer-events: none;
 }
 
@@ -339,7 +346,7 @@ async function submitRegister(): Promise<void> {
   letter-spacing: 0.02em;
   background: var(--el-color-white);
   border-radius: var(--ac-radius-sm);
-  box-shadow: 0 4px 12px rgba(6, 20, 40, 0.18);
+  box-shadow: var(--ac-brand-mark-shadow);
 }
 
 .login__brand-name {
@@ -358,7 +365,7 @@ async function submitRegister(): Promise<void> {
 
 .login__brand-kicker {
   margin: 0;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--ac-brand-text);
   font-size: var(--ac-text-meta);
   letter-spacing: 0.08em;
 }
@@ -374,7 +381,7 @@ async function submitRegister(): Promise<void> {
 
 .login__brand-text {
   margin: 0;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--ac-brand-text);
   font-size: var(--ac-text-body);
   line-height: var(--ac-line-height);
 }
@@ -382,10 +389,10 @@ async function submitRegister(): Promise<void> {
 .login__brand-foot {
   margin: 0;
   padding-top: var(--ac-space-16);
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--ac-brand-text);
   font-size: var(--ac-text-meta);
   line-height: var(--ac-line-height);
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  border-top: 1px solid var(--ac-brand-rule);
 }
 
 /* ---------- Form panel --------------------------------------------------- */

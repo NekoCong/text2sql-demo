@@ -146,6 +146,10 @@ async function onNewConversation(): Promise<void> {
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Enter' && !event.shiftKey) {
+    // Enter that confirms an IME composition must not send the message.
+    if (event.isComposing || event.keyCode === 229) {
+      return
+    }
     event.preventDefault()
     onSend()
   }
@@ -887,20 +891,20 @@ watch(
 .sql__bar {
   /* Element Plus text-button colours are scoped to the ink header. */
   --el-text-color-regular: var(--ac-code-text);
-  --el-color-primary: #ffffff;
-  --el-fill-color-light: rgba(255, 255, 255, 0.12);
-  --el-fill-color: rgba(255, 255, 255, 0.18);
+  --el-color-primary: var(--el-color-white);
+  --el-fill-color-light: var(--ac-code-wash);
+  --el-fill-color: var(--ac-code-wash-strong);
 
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--ac-space-8);
   padding: var(--ac-space-8) var(--ac-space-12);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--ac-code-rule);
 }
 
 .sql__label {
-  color: #ffffff;
+  color: var(--el-color-white);
   font-family: var(--ac-font-mono);
   font-size: var(--ac-text-meta);
   font-weight: 600;
@@ -912,13 +916,13 @@ watch(
   color: var(--ac-code-muted);
   font-size: var(--ac-text-meta);
   line-height: 20px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--ac-code-rule);
   border-radius: 999px;
 }
 
 .sql__tag--scope {
-  color: #8fe3d8;
-  background: rgba(15, 157, 138, 0.18);
+  color: var(--ac-code-accent);
+  background: var(--ac-code-accent-wash);
 }
 
 .sql__copy {
@@ -1037,7 +1041,8 @@ watch(
 }
 
 .composer__hint {
-  color: var(--ac-placeholder);
+  /* Supporting copy, not a placeholder: muted grey clears AA at 12px. */
+  color: var(--ac-muted);
   font-size: var(--ac-text-meta);
 }
 
