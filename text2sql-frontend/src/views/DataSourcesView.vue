@@ -196,26 +196,22 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="datasources">
-    <el-card shadow="never">
-      <template #header>
-        <div class="datasources__header">
-          <span class="datasources__title">数据源</span>
-          <div class="datasources__actions">
-            <el-button :icon="Refresh" text :loading="loading" @click="load">刷新</el-button>
-            <el-button type="primary" :icon="Plus" @click="openCreate">新增数据源</el-button>
-          </div>
-        </div>
-      </template>
+  <section class="ac-page datasources">
+    <header class="ac-page-header">
+      <div>
+        <h1 class="ac-page-title">数据源</h1>
+        <p class="ac-page-description">
+          登记可供智能体查询的业务数据库，可在此测试连接、编辑配置或移除不再使用的数据源。
+        </p>
+      </div>
+      <div class="ac-action-bar">
+        <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate">新增数据源</el-button>
+      </div>
+    </header>
 
-      <el-table
-        v-loading="loading"
-        :data="datasources"
-        row-key="id"
-        stripe
-        empty-text="暂无数据源"
-        class="datasources__table"
-      >
+    <div class="ac-table-wrapper">
+      <el-table v-loading="loading" :data="datasources" row-key="id" stripe>
         <el-table-column prop="id" label="ID" min-width="120" />
         <el-table-column prop="name" label="名称" min-width="140" />
         <el-table-column label="方言" width="130">
@@ -229,7 +225,7 @@ onMounted(() => {
         <el-table-column label="默认" width="80">
           <template #default="{ row }">
             <el-tag v-if="row.default" size="small" type="success">默认</el-tag>
-            <span v-else class="datasources__muted">—</span>
+            <span v-else class="ac-muted">—</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="250" fixed="right">
@@ -265,11 +261,26 @@ onMounted(() => {
             </el-popconfirm>
           </template>
         </el-table-column>
-      </el-table>
-    </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="560px" :close-on-click-modal="false">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
+        <template #empty>
+          <div class="ac-empty-state">
+            <span class="ac-empty-state__title">暂无数据源</span>
+            <span class="ac-empty-state__text">
+              新增数据源后，具备权限的账号即可向该数据库提问。
+            </span>
+          </div>
+        </template>
+      </el-table>
+    </div>
+
+    <el-dialog
+      v-model="dialogVisible"
+      class="ac-dialog"
+      :title="dialogTitle"
+      width="min(560px, calc(100vw - 32px))"
+      :close-on-click-modal="false"
+    >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="104px">
         <el-form-item label="ID" prop="id">
           <el-input
             v-model="form.id"
@@ -317,47 +328,26 @@ onMounted(() => {
         </div>
       </template>
     </el-dialog>
-  </div>
+  </section>
 </template>
 
 <style scoped>
-.datasources {
-  padding: 16px;
-}
-
-.datasources__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.datasources__title {
-  font-weight: 600;
-}
-
-.datasources__actions {
-  display: flex;
-  gap: 8px;
-}
-
-.datasources__muted {
-  color: var(--el-text-color-placeholder);
-}
-
+/* The shell gutter is the only page inset; no local padding here. */
 .datasources__control {
   width: 100%;
 }
 
 .datasources__hint {
-  margin-left: 12px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  margin-left: var(--ac-space-12);
+  color: var(--ac-muted);
+  font-size: var(--ac-text-meta);
+  line-height: var(--ac-line-height-control);
 }
 
 .datasources__footer {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ac-space-8);
 }
 
 .datasources__spacer {

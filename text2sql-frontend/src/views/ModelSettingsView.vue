@@ -177,26 +177,22 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="models">
-    <el-card shadow="never">
-      <template #header>
-        <div class="models__header">
-          <span class="models__title">模型配置</span>
-          <div class="models__actions">
-            <el-button :icon="Refresh" text :loading="loading" @click="load">刷新</el-button>
-            <el-button type="primary" :icon="Plus" @click="openCreate">新增模型</el-button>
-          </div>
-        </div>
-      </template>
+  <section class="ac-page models">
+    <header class="ac-page-header">
+      <div>
+        <h1 class="ac-page-title">模型配置</h1>
+        <p class="ac-page-description">
+          维护对话可用的模型提供方、模型名称与 API Key，默认模型会被优先调用。
+        </p>
+      </div>
+      <div class="ac-action-bar">
+        <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate">新增模型</el-button>
+      </div>
+    </header>
 
-      <el-table
-        v-loading="loading"
-        :data="configs"
-        row-key="id"
-        stripe
-        empty-text="暂无模型配置"
-        class="models__table"
-      >
+    <div class="ac-table-wrapper">
+      <el-table v-loading="loading" :data="configs" row-key="id" stripe>
         <el-table-column prop="name" label="名称" min-width="140" show-overflow-tooltip />
         <el-table-column label="提供方" width="130">
           <template #default="{ row }">
@@ -209,7 +205,7 @@ onMounted(() => {
         <el-table-column label="Base URL" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.baseUrl">{{ row.baseUrl }}</span>
-            <span v-else class="models__muted">—</span>
+            <span v-else class="ac-muted">—</span>
           </template>
         </el-table-column>
         <el-table-column label="API Key" width="100">
@@ -221,7 +217,7 @@ onMounted(() => {
         <el-table-column label="默认" width="80">
           <template #default="{ row }">
             <el-tag v-if="row.isDefault" size="small" type="success">默认</el-tag>
-            <span v-else class="models__muted">—</span>
+            <span v-else class="ac-muted">—</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="240" fixed="right">
@@ -257,16 +253,26 @@ onMounted(() => {
             </el-popconfirm>
           </template>
         </el-table-column>
+
+        <template #empty>
+          <div class="ac-empty-state">
+            <span class="ac-empty-state__title">暂无模型配置</span>
+            <span class="ac-empty-state__text">
+              新增一个模型配置后，对话才能调用大模型生成查询。
+            </span>
+          </div>
+        </template>
       </el-table>
-    </el-card>
+    </div>
 
     <el-dialog
       v-model="dialogVisible"
+      class="ac-dialog"
       :title="dialogTitle"
-      width="560px"
+      width="min(560px, calc(100vw - 32px))"
       :close-on-click-modal="false"
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="104px">
         <el-form-item label="名称" prop="name">
           <el-input v-model="form.name" maxlength="64" placeholder="展示名称，例如 通义千问" />
         </el-form-item>
@@ -313,47 +319,26 @@ onMounted(() => {
         </div>
       </template>
     </el-dialog>
-  </div>
+  </section>
 </template>
 
 <style scoped>
-.models {
-  padding: 16px;
-}
-
-.models__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.models__title {
-  font-weight: 600;
-}
-
-.models__actions {
-  display: flex;
-  gap: 8px;
-}
-
-.models__muted {
-  color: var(--el-text-color-placeholder);
-}
-
+/* The shell gutter is the only page inset; no local padding here. */
 .models__control {
   width: 100%;
 }
 
 .models__hint {
-  margin-left: 12px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  margin-left: var(--ac-space-12);
+  color: var(--ac-muted);
+  font-size: var(--ac-text-meta);
+  line-height: var(--ac-line-height-control);
 }
 
 .models__footer {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ac-space-8);
 }
 
 .models__spacer {

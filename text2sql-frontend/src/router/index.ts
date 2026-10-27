@@ -44,12 +44,8 @@ const router = createRouter({
       component: () => import('@/views/DataSourceAccessView.vue'),
       meta: { title: '数据源权限', admin: true },
     },
-    {
-      path: '/about',
-      name: 'about',
-      component: () => import('@/views/AboutView.vue'),
-      meta: { title: '关于' },
-    },
+    // The About page was removed; keep old links and bookmarks working.
+    { path: '/about', redirect: '/' },
   ],
 })
 

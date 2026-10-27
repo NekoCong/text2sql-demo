@@ -420,6 +420,80 @@ samp {
 }
 
 /* ==========================================================================
+   Shared data-table and dialog treatment
+   Used by the data screens only; the rules hang off the primitives above so
+   the chat result table keeps its own compact styling.
+   ========================================================================== */
+
+/* Tinted header, zebra rows and a quiet hover inside the table's own scroll. */
+.ac-table-wrapper > .el-table {
+  width: 100%;
+}
+
+.ac-table-wrapper .el-table th.el-table__cell {
+  color: var(--ac-text);
+  font-size: var(--ac-text-body);
+  font-weight: 600;
+  line-height: var(--ac-line-height-control);
+  background: var(--el-fill-color-light);
+}
+
+.ac-table-wrapper .el-table td.el-table__cell {
+  color: var(--ac-text);
+  font-size: var(--ac-text-body);
+  line-height: var(--ac-line-height-control);
+}
+
+.ac-table-wrapper .el-table .el-table__row--striped > td.el-table__cell {
+  background: var(--ac-fill-soft);
+}
+
+.ac-table-wrapper .el-table .el-table__row:hover > td.el-table__cell,
+.ac-table-wrapper .el-table .el-table__row--striped:hover > td.el-table__cell {
+  background: var(--el-color-primary-light-9);
+}
+
+/* Dialogs are teleported to <body>, so their surface treatment is global. */
+.ac-dialog {
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--ac-radius-lg);
+  box-shadow: var(--el-box-shadow-dark);
+}
+
+.ac-dialog .el-dialog__header {
+  padding: var(--ac-space-24) var(--ac-space-24) 0;
+}
+
+.ac-dialog .el-dialog__title {
+  color: var(--ac-ink);
+  font-family: var(--ac-font-serif);
+  font-size: var(--ac-text-lead);
+  font-weight: 600;
+}
+
+.ac-dialog .el-dialog__headerbtn {
+  top: var(--ac-space-16);
+  right: var(--ac-space-16);
+  width: 32px;
+  height: 32px;
+}
+
+.ac-dialog .el-dialog__body {
+  padding: var(--ac-space-24);
+  color: var(--ac-text);
+}
+
+.ac-dialog .el-dialog__footer {
+  padding: 0 var(--ac-space-24) var(--ac-space-24);
+}
+
+/* The last field should not add trailing space above the footer. */
+.ac-dialog .el-form-item:last-child {
+  margin-bottom: 0;
+}
+
+/* ==========================================================================
    Shell bridges
    ========================================================================== */
 
