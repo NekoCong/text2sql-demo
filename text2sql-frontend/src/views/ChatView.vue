@@ -310,6 +310,20 @@ watch(
 
             <template v-for="(segment, index) in segments(message.content)" :key="index">
               <pre v-if="segment.type === 'code'" class="bubble__code"><code>{{ segment.value }}</code></pre>
+              <div v-else-if="segment.type === 'table'" class="md-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th v-for="(header, cellIndex) in segment.headers" :key="cellIndex">{{ header }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, rowIndex) in segment.rows" :key="rowIndex">
+                      <td v-for="(cell, cellIndex) in row" :key="cellIndex">{{ cell }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
               <p v-else class="bubble__text">{{ segment.value }}</p>
             </template>
 
@@ -503,6 +517,31 @@ watch(
 
 .bubble__text {
   margin: 0;
+}
+
+.md-table {
+  margin: 8px 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.md-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.md-table th,
+.md-table td {
+  border: 1px solid var(--el-border-color-light);
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.md-table th {
+  background: var(--el-fill-color-light);
+  font-weight: 600;
 }
 
 .bubble__explanation {
