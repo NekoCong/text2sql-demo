@@ -40,6 +40,11 @@
   --ac-chart-5: #4b8bbe;
   --ac-chart-6: #94a3b8;
 
+  /* Code / SQL surface (chat workspace) ------------------------------------ */
+  --ac-code-surface: #0f172a;
+  --ac-code-text: #d6e2f0;
+  --ac-code-muted: #94a3b8;
+
   /* Radii, elevation ------------------------------------------------------- */
   --ac-radius: 10px;
   --ac-radius-sm: 8px;
@@ -402,39 +407,9 @@ samp {
    Shell bridges
    ========================================================================== */
 
-/* ChatView fills the shell's main area until the chat workspace restyle. */
+/* ChatView fills the shell's main area; the shell gutter is the only
+   horizontal inset, so the workspace must not add padding of its own. */
 .layout__page--chat > * {
   flex: 1;
   min-height: 0;
-}
-
-/* Legacy chat padding: ChatView still owns 16px until the chat workspace
-   restyle (Batch 4), so the shell gutter and this padding stack for now. */
-.chat {
-  height: 100%;
-  padding: var(--ac-space-16);
-}
-
-/* ==========================================================================
-   Narrow-viewport guards
-   The shell must never scroll horizontally; the chat workspace restyle owns the
-   final mobile layout, these rules only keep the current header inside the card.
-   ========================================================================== */
-
-@media (max-width: 767px) {
-  .chat .chat__header {
-    flex-wrap: wrap;
-    gap: var(--ac-space-8);
-  }
-
-  .chat .chat__header-actions {
-    flex-wrap: wrap;
-    width: 100%;
-  }
-
-  .chat .chat__datasource {
-    flex: 1 1 180px;
-    width: auto;
-    min-width: 0;
-  }
 }

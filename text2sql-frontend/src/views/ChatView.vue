@@ -180,11 +180,6 @@ function stepText(step: ChatStep): string {
   return `${name} ${step.state ?? '结束'}${suffix}`
 }
 
-/** Structured messages (steps / SQL / rows) get the full bubble width. */
-function isRich(message: ChatMessage): boolean {
-  return Boolean(message.sql || message.rows || (message.steps?.length ?? 0) > 0)
-}
-
 /** Stringifies a result cell for display. */
 function cellText(row: Record<string, unknown>, key: string): string {
   const value = row[key]
@@ -235,11 +230,43 @@ watch(
 
 <template>
   <div class="chat">
-    <el-card class="chat__panel" shadow="never">
-      <template #header>
-        <div class="chat__header">
-          <span class="chat__title">Text2SQL 对话</span>
-          <div class="chat__header-actions">
+    <section class="chat__panel" aria-label="数据问答工作区">
+      <header class="chat__header">
+        <div class="chat__heading">
+          <h1 class="chat__title">数据问答</h1>
+          <p class="chat__subtitle">用自然语言描述问题，自动生成 SQL、执行并返回结果。</p>
+        </div>
+
+        <div class="chat__controls">
+          <el-select
+            v-model="chat.datasourceId"
+            class="chat__datasource"
+            placeholder="选择数据源"
+            :disabled="chat.datasources.length === 0"
+          >
+            <el-option
+              v-for="datasource in chat.datasources"
+              :key="datasource.id"
+              :label="datasource.name"
+              :value="datasource.id"
+            >
+              <span class="chat__datasource-option">
+                <span class="chat__datasource-name">{{ datasource.name }}</span>
+                <el-tag size="small" effect="plain" type="info">{{ datasource.dialect }}</el-tag>
+              </span>
+            </el-option>
+            <template #label>
+              <span v-if="selectedDatasource" class="chat__datasource-option">
+                <span class="chat__datasource-name">{{ selectedDatasource.name }}</span>
+                <el-tag size="small" effect="plain" type="info">
+                  {{ selectedDatasource.dialect }}
+                </el-tag>
+              </span>
+            </template>
+          </el-select>
+
+          <div class="chat__mode">
+            <span class="chat__mode-label">模式</span>
             <el-switch
               v-model="chat.agentMode"
               inline-prompt
@@ -247,69 +274,71 @@ watch(
               inactive-text="流水线"
               :disabled="chat.streaming"
             />
-            <el-select
-              v-model="chat.datasourceId"
-              class="chat__datasource"
-              size="small"
-              placeholder="选择数据源"
-              :disabled="chat.datasources.length === 0"
-            >
-              <el-option
-                v-for="datasource in chat.datasources"
-                :key="datasource.id"
-                :label="datasource.name"
-                :value="datasource.id"
-              >
-                <span class="chat__datasource-option">
-                  <span class="chat__datasource-name">{{ datasource.name }}</span>
-                  <el-tag size="small" effect="plain" type="info">{{ datasource.dialect }}</el-tag>
-                </span>
-              </el-option>
-              <template #label>
-                <span v-if="selectedDatasource" class="chat__datasource-option">
-                  <span class="chat__datasource-name">{{ selectedDatasource.name }}</span>
-                  <el-tag size="small" effect="plain" type="info">
-                    {{ selectedDatasource.dialect }}
-                  </el-tag>
-                </span>
-              </template>
-            </el-select>
-            <el-button :icon="Plus" text @click="onNewConversation">新建对话</el-button>
           </div>
-        </div>
-      </template>
 
-      <div ref="scrollRef" v-loading="loadingHistory" class="chat__messages">
-        <el-empty
-          v-if="chat.messages.length === 0"
-          description="输入自然语言问题，自动生成 SQL"
-        />
-        <div
+          <el-button class="chat__new" :icon="Plus" text @click="onNewConversation">
+            新建对话
+          </el-button>
+        </div>
+      </header>
+
+      <div
+        ref="scrollRef"
+        v-loading="loadingHistory"
+        class="chat__messages"
+        aria-label="对话记录"
+        :aria-busy="chat.streaming"
+      >
+        <div v-if="chat.messages.length === 0" class="empty">
+          <span class="empty__mark" aria-hidden="true">T2S</span>
+          <h2 class="empty__title">今天想了解校园里的哪些数据？</h2>
+          <p class="empty__text">选择一个示例，或直接输入你的问题。</p>
+          <div class="empty__chips">
+            <button
+              v-for="example in examples"
+              :key="example"
+              type="button"
+              class="chip"
+              @click="useExample(example)"
+            >
+              {{ example }}
+            </button>
+          </div>
+          <p class="empty__scope">查询结果仅限当前账号的数据权限范围。</p>
+        </div>
+
+        <article
           v-for="message in chat.messages"
           :key="message.id"
-          class="bubble"
-          :class="`bubble--${message.role}`"
+          class="msg"
+          :class="[
+            `msg--${message.role}`,
+            { 'msg--streaming': message.streaming, 'msg--error': message.error },
+          ]"
         >
-          <div class="bubble__role">{{ message.role === 'user' ? '我' : 'Text2SqlAgent' }}</div>
-          <div
-            class="bubble__body"
-            :class="{ 'bubble__body--error': message.error, 'bubble__body--rich': isRich(message) }"
-          >
-            <div
+          <div v-if="message.role === 'assistant'" class="msg__identity">
+            <span class="msg__avatar" aria-hidden="true">AI</span>
+            <span class="msg__agent">Text2SqlAgent</span>
+            <span v-if="message.streaming" class="msg__state msg__state--live">生成中…</span>
+            <span v-else-if="message.error" class="msg__state msg__state--error">生成失败</span>
+          </div>
+
+          <div class="msg__body">
+            <ol
               v-if="visibleSteps(message).length > 0"
               class="steps"
               :class="{ 'steps--live': message.streaming }"
             >
-              <div v-for="(step, index) in visibleSteps(message)" :key="index" class="steps__item">
-                <span class="steps__dot" />
+              <li v-for="(step, index) in visibleSteps(message)" :key="index" class="steps__item">
+                <span class="steps__dot" aria-hidden="true" />
                 <span class="steps__detail">{{ stepText(step) }}</span>
-              </div>
-            </div>
+              </li>
+            </ol>
 
-            <p v-if="message.explanation" class="bubble__explanation">{{ message.explanation }}</p>
+            <p v-if="message.explanation" class="msg__explanation">{{ message.explanation }}</p>
 
             <template v-for="(segment, index) in segments(message.content)" :key="index">
-              <pre v-if="segment.type === 'code'" class="bubble__code"><code>{{ segment.value }}</code></pre>
+              <pre v-if="segment.type === 'code'" class="code"><code>{{ segment.value }}</code></pre>
               <div v-else-if="segment.type === 'table'" class="md-table">
                 <table>
                   <thead>
@@ -324,21 +353,19 @@ watch(
                   </tbody>
                 </table>
               </div>
-              <p v-else class="bubble__text">{{ segment.value }}</p>
+              <p v-else class="msg__text">{{ segment.value }}</p>
             </template>
 
             <div v-if="message.sql" class="sql">
               <div class="sql__bar">
                 <span class="sql__label">SQL</span>
-                <el-tag v-if="message.dialect" size="small" effect="plain" type="info">
-                  {{ message.dialect }}
-                </el-tag>
-                <el-tag v-if="message.scopeApplied" size="small" effect="plain" type="success">
+                <span v-if="message.dialect" class="sql__tag">{{ message.dialect }}</span>
+                <span v-if="message.scopeApplied" class="sql__tag sql__tag--scope">
                   已按当前数据范围过滤
-                </el-tag>
-                <el-tag v-if="message.rowCount !== undefined" size="small" effect="plain" type="info">
+                </span>
+                <span v-if="message.rowCount !== undefined" class="sql__tag">
                   {{ message.rowCount }} 行
-                </el-tag>
+                </span>
                 <el-button
                   class="sql__copy"
                   :icon="DocumentCopy"
@@ -349,7 +376,7 @@ watch(
                   复制
                 </el-button>
               </div>
-              <pre class="bubble__code"><code>{{ message.sql }}</code></pre>
+              <pre class="sql__code"><code>{{ message.sql }}</code></pre>
             </div>
 
             <div v-if="message.rows" class="result">
@@ -363,18 +390,20 @@ watch(
                 :rows="message.rows"
                 :chart="message.chart"
               />
-              <el-table :data="message.rows.rows" size="small" border max-height="320">
-                <el-table-column
-                  v-for="column in message.rows.columns"
-                  :key="column.name"
-                  :prop="column.name"
-                  :label="column.name"
-                  min-width="120"
-                  show-overflow-tooltip
-                >
-                  <template #default="{ row }">{{ cellText(row, column.name) }}</template>
-                </el-table-column>
-              </el-table>
+              <div class="result__table">
+                <el-table :data="message.rows.rows" size="small" border stripe max-height="320">
+                  <el-table-column
+                    v-for="column in message.rows.columns"
+                    :key="column.name"
+                    :prop="column.name"
+                    :label="column.name"
+                    min-width="120"
+                    show-overflow-tooltip
+                  >
+                    <template #default="{ row }">{{ cellText(row, column.name) }}</template>
+                  </el-table-column>
+                </el-table>
+              </div>
               <div class="result__footer">
                 <span>{{ message.rows.rowCount }} 行 · {{ message.rows.elapsedMs }}ms</span>
                 <el-tag v-if="message.rows.truncated" size="small" type="warning" effect="plain">
@@ -383,87 +412,122 @@ watch(
               </div>
             </div>
 
-            <span v-if="message.streaming" class="bubble__cursor">▋</span>
+            <span v-if="message.streaming" class="msg__cursor" aria-hidden="true" />
+          </div>
+        </article>
+      </div>
+
+      <footer class="chat__composer">
+        <div v-if="chat.messages.length > 0" class="chat__examples">
+          <button
+            v-for="example in examples"
+            :key="example"
+            type="button"
+            class="chip"
+            @click="useExample(example)"
+          >
+            {{ example }}
+          </button>
+        </div>
+
+        <div class="composer" :class="{ 'composer--busy': chat.streaming }">
+          <el-input
+            v-model="draft"
+            class="composer__input"
+            type="textarea"
+            :rows="3"
+            resize="none"
+            placeholder="例如：查询每个月的订单数量"
+            @keydown="onKeydown"
+          />
+          <div class="composer__bar">
+            <span class="composer__hint">
+              {{ chat.streaming ? '正在生成答案…' : 'Enter 发送 · Shift+Enter 换行' }}
+            </span>
+            <div class="composer__actions">
+              <el-button v-if="chat.streaming" :icon="VideoPlay" @click="chat.stop()">停止</el-button>
+              <el-button type="primary" :icon="Promotion" :disabled="!canSend" @click="onSend">
+                发送
+              </el-button>
+            </div>
           </div>
         </div>
-      </div>
-
-      <div class="chat__examples">
-        <el-tag
-          v-for="example in examples"
-          :key="example"
-          class="chat__example"
-          effect="plain"
-          @click="useExample(example)"
-        >
-          {{ example }}
-        </el-tag>
-      </div>
-
-      <div class="chat__composer">
-        <el-input
-          v-model="draft"
-          type="textarea"
-          :rows="3"
-          resize="none"
-          placeholder="例如：查询每个月的订单数量（Enter 发送，Shift+Enter 换行）"
-          @keydown="onKeydown"
-        />
-        <div class="chat__actions">
-          <el-button v-if="chat.streaming" :icon="VideoPlay" @click="chat.stop()">停止</el-button>
-          <el-button type="primary" :icon="Promotion" :disabled="!canSend" @click="onSend">
-            发送
-          </el-button>
-        </div>
-      </div>
-    </el-card>
+      </footer>
+    </section>
   </div>
 </template>
 
 <style scoped>
+/* ---------- Workspace surface -------------------------------------------- */
+
 .chat {
-  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .chat__panel {
   display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.chat__panel :deep(.el-card__body) {
-  display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  gap: 12px;
+  overflow: hidden;
+  background: var(--ac-surface);
+  border: 1px solid var(--ac-border-soft);
+  border-radius: var(--ac-radius);
+  box-shadow: var(--ac-shadow-sm);
 }
+
+/* ---------- Header ------------------------------------------------------- */
 
 .chat__header {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-end;
   justify-content: space-between;
+  gap: var(--ac-space-12) var(--ac-space-24);
+  padding: var(--ac-space-16) var(--ac-space-24);
+  border-bottom: 1px solid var(--ac-border-soft);
+}
+
+.chat__heading {
+  min-width: 0;
 }
 
 .chat__title {
+  margin: 0;
+  color: var(--ac-ink);
+  font-family: var(--ac-font-serif);
+  font-size: var(--ac-text-title);
   font-weight: 600;
+  line-height: 1.3;
 }
 
-.chat__header-actions {
+.chat__subtitle {
+  margin: var(--ac-space-4) 0 0;
+  color: var(--ac-muted);
+  font-size: var(--ac-text-meta);
+  line-height: var(--ac-line-height);
+}
+
+.chat__controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--ac-space-8) var(--ac-space-12);
+  min-width: 0;
 }
 
 .chat__datasource {
-  width: 220px;
+  width: 240px;
+  max-width: 100%;
 }
 
 .chat__datasource-option {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ac-space-12);
 }
 
 .chat__datasource-name {
@@ -472,94 +536,251 @@ watch(
   white-space: nowrap;
 }
 
+.chat__mode {
+  display: flex;
+  align-items: center;
+  gap: var(--ac-space-8);
+}
+
+.chat__mode-label {
+  color: var(--ac-muted);
+  font-size: var(--ac-text-meta);
+}
+
+.chat__new {
+  /* Tertiary action: regular-control colour drops to muted without EP overrides. */
+  --el-text-color-regular: var(--ac-muted);
+}
+
+/* ---------- Transcript --------------------------------------------------- */
+
 .chat__messages {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: var(--ac-space-16);
+  min-height: 0;
+  padding: var(--ac-space-24);
+  overflow-x: hidden;
   overflow-y: auto;
-  padding-right: 8px;
+}
+
+.empty {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ac-space-4);
+  padding: var(--ac-space-32) var(--ac-space-16);
+  text-align: center;
 }
 
-.bubble__role {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  margin-bottom: 4px;
-}
-
-.bubble--user {
-  align-items: flex-end;
-  display: flex;
-  flex-direction: column;
-}
-
-.bubble__body {
-  max-width: 80%;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--el-fill-color-light);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.bubble__body--rich {
-  max-width: 100%;
-}
-
-.bubble--user .bubble__body {
-  background: var(--el-color-primary-light-9);
-}
-
-.bubble__body--error {
-  background: var(--el-color-danger-light-9);
-  color: var(--el-color-danger);
-}
-
-.bubble__text {
-  margin: 0;
-}
-
-.md-table {
-  margin: 8px 0;
-  max-width: 100%;
-  overflow-x: auto;
-}
-
-.md-table table {
-  border-collapse: collapse;
-  width: 100%;
+.empty__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  color: var(--ac-surface);
   font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, var(--ac-primary), var(--ac-primary-pressed));
+  border-radius: var(--ac-radius);
+  box-shadow: var(--ac-shadow-sm);
 }
 
-.md-table th,
-.md-table td {
-  border: 1px solid var(--el-border-color-light);
-  padding: 6px 10px;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.md-table th {
-  background: var(--el-fill-color-light);
+.empty__title {
+  margin: var(--ac-space-8) 0 0;
+  color: var(--ac-ink);
+  font-size: var(--ac-text-lead);
   font-weight: 600;
 }
 
-.bubble__explanation {
-  margin: 0 0 8px;
+.empty__text {
+  margin: 0;
+  color: var(--ac-text);
+  font-size: var(--ac-text-body);
 }
 
-.bubble__code {
-  margin: 8px 0;
-  padding: 12px;
-  border-radius: 8px;
-  background: #1e1e2e;
-  color: #cdd6f4;
-  overflow-x: auto;
-  font-family: 'Cascadia Code', Consolas, monospace;
-  font-size: 13px;
+.empty__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--ac-space-8);
+  margin-top: var(--ac-space-12);
 }
 
-.bubble__cursor {
+.empty__scope {
+  margin: var(--ac-space-12) 0 0;
+  color: var(--ac-muted);
+  font-size: var(--ac-text-meta);
+}
+
+/* Outlined neutral chip; the hover tint marks it as actionable. */
+.chip {
+  padding: 6px 14px;
+  color: var(--ac-text);
+  font-family: inherit;
+  font-size: var(--ac-text-meta);
+  line-height: 1.4;
+  cursor: pointer;
+  background: var(--ac-surface);
+  border: 1px solid var(--ac-border);
+  border-radius: 999px;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.chip:hover {
+  color: var(--ac-primary);
+  background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-7);
+}
+
+/* ---------- Messages ----------------------------------------------------- */
+
+.msg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ac-space-8);
+  min-width: 0;
+}
+
+.msg--user {
+  align-items: flex-end;
+}
+
+.msg__identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ac-space-8);
+}
+
+.msg__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--ac-primary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-color-primary-light-8);
+  border-radius: var(--ac-radius-sm);
+}
+
+.msg__agent {
+  color: var(--ac-text);
+  font-size: var(--ac-text-meta);
+  font-weight: 600;
+}
+
+.msg__state {
+  padding: 0 var(--ac-space-8);
+  font-size: var(--ac-text-meta);
+  line-height: 20px;
+  border-radius: 999px;
+}
+
+.msg__state--live {
+  /* Ink text on a teal tint keeps small badges at AA contrast. */
+  --msg-state-dot: var(--ac-accent);
+
+  color: var(--ac-ink);
+  background: var(--el-color-success-light-9);
+}
+
+.msg__state--error {
+  --msg-state-dot: var(--el-color-danger);
+
+  color: var(--el-color-danger-dark-2);
+  background: var(--el-color-danger-light-9);
+}
+
+.msg__state::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  vertical-align: 1px;
+  content: '';
+  background: var(--msg-state-dot);
+  border-radius: 50%;
+}
+
+.msg__body {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.msg--user .msg__body {
+  max-width: 78%;
+  padding: 10px var(--ac-space-16);
+  color: var(--ac-ink);
+  font-size: var(--ac-text-body);
+  line-height: var(--ac-line-height);
+  white-space: pre-wrap;
+  background: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-color-primary-light-8);
+  border-radius: var(--ac-radius-lg);
+}
+
+.msg--assistant .msg__body {
+  padding: var(--ac-space-16) var(--ac-space-24);
+  background: var(--ac-surface);
+  border: 1px solid var(--ac-border-soft);
+  border-radius: var(--ac-radius);
+  box-shadow: var(--ac-shadow-sm);
+}
+
+/* Streaming: the card stays primary-tinted until the answer completes. */
+.msg--streaming .msg__body {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 0 0 3px var(--el-color-primary-light-9);
+}
+
+/* Error: danger-tinted surface, but prose keeps ink contrast. */
+.msg--error .msg__body {
+  background: var(--el-color-danger-light-9);
+  border-color: var(--el-color-danger-light-7);
+  box-shadow: none;
+}
+
+.msg__text {
+  margin: 0 0 var(--ac-space-8);
+  color: var(--ac-ink);
+  font-size: var(--ac-text-body);
+  line-height: var(--ac-line-height);
+  white-space: pre-wrap;
+}
+
+.msg__text:last-child {
+  margin-bottom: 0;
+}
+
+.msg__explanation {
+  margin: 0 0 var(--ac-space-12);
+  padding-left: var(--ac-space-12);
+  color: var(--ac-text);
+  font-size: var(--ac-text-body);
+  line-height: var(--ac-line-height);
+  border-left: 3px solid var(--el-color-primary-light-7);
+}
+
+.msg__cursor {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--ac-primary);
   animation: blink 1s step-end infinite;
 }
 
@@ -569,31 +790,37 @@ watch(
   }
 }
 
+/* ---------- Steps -------------------------------------------------------- */
+
 .steps {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin: 0 0 var(--ac-space-12);
+  padding: 0;
+  list-style: none;
 }
 
 .steps__item {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  gap: var(--ac-space-8);
+  color: var(--ac-muted);
+  font-size: var(--ac-text-meta);
+  line-height: var(--ac-line-height);
 }
 
 .steps__dot {
   flex: none;
   width: 6px;
   height: 6px;
-  margin-top: 5px;
+  margin-top: 7px;
+  background: var(--ac-accent);
   border-radius: 50%;
-  background: var(--el-color-primary);
 }
 
 .steps--live .steps__item:last-child .steps__dot {
+  box-shadow: 0 0 0 3px var(--el-color-success-light-9);
   animation: step-pulse 1.2s ease-in-out infinite;
 }
 
@@ -603,67 +830,264 @@ watch(
   }
 }
 
+/* ---------- Prose code + markdown tables --------------------------------- */
+
+.code {
+  margin: var(--ac-space-8) 0;
+  padding: var(--ac-space-12);
+  overflow-x: auto;
+  color: var(--ac-ink);
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--ac-fill);
+  border: 1px solid var(--ac-border-soft);
+  border-radius: var(--ac-radius-sm);
+}
+
+.md-table {
+  max-width: 100%;
+  margin: var(--ac-space-8) 0;
+  overflow-x: auto;
+  border: 1px solid var(--ac-border-soft);
+  border-radius: var(--ac-radius-sm);
+}
+
+.md-table table {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+}
+
+.md-table th,
+.md-table td {
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--ac-border-soft);
+}
+
+.md-table th {
+  background: var(--ac-fill);
+  font-weight: 600;
+}
+
+.md-table tbody tr:nth-child(even) td {
+  background: var(--ac-fill-soft);
+}
+
+/* ---------- SQL ---------------------------------------------------------- */
+
 .sql {
-  margin-top: 8px;
+  margin-top: var(--ac-space-12);
+  overflow: hidden;
+  background: var(--ac-code-surface);
+  border-radius: var(--ac-radius);
 }
 
 .sql__bar {
+  /* Element Plus text-button colours are scoped to the ink header. */
+  --el-text-color-regular: var(--ac-code-text);
+  --el-color-primary: #ffffff;
+  --el-fill-color-light: rgba(255, 255, 255, 0.12);
+  --el-fill-color: rgba(255, 255, 255, 0.18);
+
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--ac-space-8);
+  padding: var(--ac-space-8) var(--ac-space-12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .sql__label {
-  font-size: 12px;
+  color: #ffffff;
+  font-family: var(--ac-font-mono);
+  font-size: var(--ac-text-meta);
   font-weight: 600;
-  color: var(--el-text-color-secondary);
+  letter-spacing: 0.04em;
+}
+
+.sql__tag {
+  padding: 0 var(--ac-space-8);
+  color: var(--ac-code-muted);
+  font-size: var(--ac-text-meta);
+  line-height: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+
+.sql__tag--scope {
+  color: #8fe3d8;
+  background: rgba(15, 157, 138, 0.18);
 }
 
 .sql__copy {
   margin-left: auto;
 }
 
-.sql .bubble__code {
-  margin: 8px 0 0;
+.sql__code {
+  margin: 0;
+  padding: var(--ac-space-12) var(--ac-space-16);
+  overflow-x: auto;
+  color: var(--ac-code-text);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre;
 }
 
+/* ---------- Result ------------------------------------------------------- */
+
 .result {
-  margin-top: 8px;
-  white-space: normal;
+  min-width: 0;
+  margin-top: var(--ac-space-12);
 }
 
 .result__chart {
-  margin-bottom: 10px;
+  margin-bottom: var(--ac-space-12);
+}
+
+/* The table owns its horizontal scroll; the page never widens. */
+.result__table {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--ac-border-soft);
+  border-radius: var(--ac-radius-sm);
+}
+
+.result__table :deep(.el-table) {
+  width: 100%;
+}
+
+.result__table :deep(.el-table th.el-table__cell) {
+  color: var(--ac-text);
+  font-weight: 600;
+  background: var(--el-fill-color-light);
+}
+
+.result__table :deep(.el-table .el-table__cell) {
+  font-size: 13px;
 }
 
 .result__footer {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ac-space-8);
   margin-top: 6px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--ac-muted);
+  font-size: var(--ac-text-meta);
+}
+
+/* ---------- Composer ----------------------------------------------------- */
+
+.chat__composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ac-space-8);
+  padding: var(--ac-space-16) var(--ac-space-24) var(--ac-space-24);
+  background: var(--ac-surface);
+  border-top: 1px solid var(--ac-border-soft);
 }
 
 .chat__examples {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ac-space-8);
 }
 
-.chat__example {
-  cursor: pointer;
-}
-
-.chat__composer {
+.composer {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  overflow: hidden;
+  background: var(--ac-surface);
+  border: 1px solid var(--ac-border);
+  border-radius: var(--ac-radius-lg);
+  box-shadow: var(--ac-shadow-sm);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
-.chat__actions {
+.composer:focus-within {
+  border-color: var(--ac-primary);
+  box-shadow: 0 0 0 3px var(--el-color-primary-light-5);
+}
+
+.composer--busy {
+  border-color: var(--el-color-primary-light-5);
+}
+
+.composer :deep(.el-textarea__inner) {
+  padding: var(--ac-space-12) var(--ac-space-16);
+  color: var(--ac-ink);
+  font-size: var(--ac-text-body);
+  line-height: var(--ac-line-height);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  resize: none;
+}
+
+.composer__bar {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ac-space-8);
+  padding: 0 var(--ac-space-12) var(--ac-space-8) var(--ac-space-16);
+}
+
+.composer__hint {
+  color: var(--ac-placeholder);
+  font-size: var(--ac-text-meta);
+}
+
+.composer__actions {
+  display: flex;
+  gap: var(--ac-space-8);
+}
+
+/* ---------- Responsive --------------------------------------------------- */
+
+@media (max-width: 1023px) {
+  .chat__header {
+    align-items: flex-start;
+  }
+
+  .chat__controls {
+    width: 100%;
+  }
+
+  .chat__datasource {
+    flex: 1 1 200px;
+    width: auto;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .chat__header {
+    padding: var(--ac-space-16);
+  }
+
+  .chat__datasource {
+    flex: 1 1 160px;
+  }
+
+  .chat__messages {
+    gap: var(--ac-space-12);
+    padding: var(--ac-space-16);
+  }
+
+  .msg--user .msg__body {
+    max-width: 88%;
+  }
+
+  .msg--assistant .msg__body {
+    padding: var(--ac-space-12) var(--ac-space-16);
+  }
+
+  .chat__composer {
+    padding: var(--ac-space-12) var(--ac-space-16) var(--ac-space-16);
+  }
 }
 </style>

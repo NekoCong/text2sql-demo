@@ -62,15 +62,31 @@ function readToken(name: string, fallback: string): string {
   return value || fallback
 }
 
-/** Palette derived from the Element Plus theme tokens used by the rest of the page. */
+/**
+ * Categorical palette documented in the Academic Clarity theme.
+ *
+ * Teal is the data/insight accent and is deliberately part of the series colors;
+ * the fallbacks repeat the token values so a chart still renders before the
+ * stylesheet is applied (or in a non-themed embed).
+ */
 function themePalette(): string[] {
   return [
-    readToken('--el-color-primary', '#409eff'),
-    readToken('--el-color-success', '#67c23a'),
-    readToken('--el-color-warning', '#e6a23c'),
-    readToken('--el-color-danger', '#f56c6c'),
-    readToken('--el-color-info', '#909399'),
+    readToken('--ac-chart-1', '#1E5AA8'),
+    readToken('--ac-chart-2', '#0F9D8A'),
+    readToken('--ac-chart-3', '#D97706'),
+    readToken('--ac-chart-4', '#7C6BC4'),
+    readToken('--ac-chart-5', '#4B8BBE'),
+    readToken('--ac-chart-6', '#94A3B8'),
   ]
+}
+
+/** Neutral axis and split-line styling so the chart sits inside the surface card. */
+function axisStyle(): Record<string, unknown> {
+  return {
+    axisLabel: { color: readToken('--ac-muted', '#667085') },
+    axisLine: { lineStyle: { color: readToken('--ac-border', '#E4E7EC') } },
+    axisTick: { show: false },
+  }
 }
 
 /** Builds the ECharts option for the spec: bar / line share axes, pie uses name-value pairs. */
@@ -80,6 +96,7 @@ function buildOption(rows: QueryResult, chart: ChartSpec): EChartsCoreOption {
   const points = chartPoints(rows, xField, yField)
   const option: EChartsCoreOption = {
     color: themePalette(),
+    textStyle: { color: readToken('--ac-text', '#475467') },
     tooltip: { trigger: chart.type === 'PIE' ? 'item' : 'axis' },
   }
 
@@ -87,12 +104,20 @@ function buildOption(rows: QueryResult, chart: ChartSpec): EChartsCoreOption {
     option.title = {
       text: chart.title,
       left: 'center',
-      textStyle: { fontSize: 14, fontWeight: 600 },
+      textStyle: {
+        color: readToken('--ac-ink', '#1F2A37'),
+        fontSize: 14,
+        fontWeight: 600,
+      },
     }
   }
 
   if (chart.type === 'PIE') {
-    option.legend = { bottom: 0, type: 'scroll' }
+    option.legend = {
+      bottom: 0,
+      type: 'scroll',
+      textStyle: { color: readToken('--ac-text', '#475467') },
+    }
     option.series = [
       {
         type: 'pie',
@@ -105,12 +130,18 @@ function buildOption(rows: QueryResult, chart: ChartSpec): EChartsCoreOption {
     ]
   } else {
     option.grid = { left: 12, right: 16, top: chart.title ? 44 : 16, bottom: 8, containLabel: true }
+    const axis = axisStyle()
     option.xAxis = {
       type: 'category',
       data: points.map((point) => point.name),
-      axisLabel: { hideOverlap: true },
+      ...axis,
+      axisLabel: { ...(axis.axisLabel as Record<string, unknown>), hideOverlap: true },
     }
-    option.yAxis = { type: 'value' }
+    option.yAxis = {
+      type: 'value',
+      ...axis,
+      splitLine: { lineStyle: { color: readToken('--ac-border-soft', '#EEF0F3') } },
+    }
     option.series =
       chart.type === 'LINE'
         ? [{ type: 'line', data: points.map((point) => point.value), smooth: true, symbolSize: 6 }]
