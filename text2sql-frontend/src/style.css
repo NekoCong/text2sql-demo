@@ -1,9 +1,190 @@
+/* ==========================================================================
+   Academic Clarity — theme foundation
+   Token-first: the --ac-* palette is mapped onto Element Plus's published
+   variables so every Element Plus control inherits the theme without a Sass
+   build step. Light appearance only; no dark theme is defined here.
+   ========================================================================== */
+
 :root {
-  font-family:
-    'Inter', 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
-  line-height: 1.5;
   color-scheme: light;
+
+  /* Palette ---------------------------------------------------------------- */
+  --ac-primary: #1e5aa8;
+  --ac-primary-pressed: #184886;
+  --ac-accent: #0f9d8a; /* data / insight / success — never primary actions */
+  --ac-warning: #d97706;
+  --ac-danger: #dc2626;
+  --ac-info: #64748b;
+
+  --ac-canvas: #f6f7f9;
+  --ac-surface: #ffffff;
+  --ac-ink: #1f2a37;
+  --ac-text: #475467;
+  --ac-muted: #667085;
+  --ac-placeholder: #98a2b3;
+  --ac-border: #e4e7ec;
+  --ac-border-soft: #eef0f3;
+  --ac-fill: #f2f4f7;
+  --ac-fill-soft: #f9fafb;
+
+  /* Neutral chrome details ------------------------------------------------- */
+  --ac-scrollbar: #c7cdd8;
+  --ac-scrollbar-hover: #98a2b3;
+  --ac-backdrop: rgba(16, 24, 40, 0.45);
+
+  /* Categorical data-visualization palette (documented theme asset) -------- */
+  --ac-chart-1: #1e5aa8;
+  --ac-chart-2: #0f9d8a;
+  --ac-chart-3: #d97706;
+  --ac-chart-4: #7c6bc4;
+  --ac-chart-5: #4b8bbe;
+  --ac-chart-6: #94a3b8;
+
+  /* Radii, elevation ------------------------------------------------------- */
+  --ac-radius: 10px;
+  --ac-radius-sm: 8px;
+  --ac-radius-lg: 12px;
+  --ac-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --ac-shadow-md: 0 8px 24px rgba(16, 24, 40, 0.06);
+
+  /* 8pt spacing rhythm ----------------------------------------------------- */
+  --ac-space-4: 4px;
+  --ac-space-8: 8px;
+  --ac-space-12: 12px;
+  --ac-space-16: 16px;
+  --ac-space-24: 24px;
+  --ac-space-32: 32px;
+  --ac-space-40: 40px;
+  --ac-space-48: 48px;
+  --ac-space-64: 64px;
+
+  /* Type ------------------------------------------------------------------- */
+  --ac-font-sans:
+    'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Arial, sans-serif;
+  --ac-font-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', SimSun, serif;
+  --ac-font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+
+  --ac-text-meta: 12px;
+  --ac-text-body: 14px;
+  --ac-text-lead: 16px;
+  --ac-text-title: 20px;
+  --ac-text-hero: 28px;
+  --ac-line-height: 1.6;
+  --ac-line-height-control: 1.4;
+
+  /* Shell metrics ---------------------------------------------------------- */
+  --ac-header-height: 64px;
+  --ac-content-max: 1200px;
+  --ac-content-max-wide: 1280px;
+  --ac-gutter: 24px;
+  --ac-sidebar-width: 260px;
+  --ac-sidebar-width-md: 232px;
+
+  /* Element Plus mapping — palette ----------------------------------------- */
+  --el-color-primary: #1e5aa8;
+  --el-color-primary-light-3: #628cc2;
+  --el-color-primary-light-5: #8fadd4;
+  --el-color-primary-light-7: #bccee5;
+  --el-color-primary-light-8: #d2deee;
+  --el-color-primary-light-9: #e9eff6;
+  --el-color-primary-dark-2: #184886;
+
+  --el-color-success: #0f9d8a;
+  --el-color-success-light-3: #57baad;
+  --el-color-success-light-5: #87cec4;
+  --el-color-success-light-7: #b7e2dc;
+  --el-color-success-light-8: #cfebe8;
+  --el-color-success-light-9: #e7f5f4;
+  --el-color-success-dark-2: #0c7e6e;
+
+  --el-color-warning: #d97706;
+  --el-color-warning-light-3: #e4a051;
+  --el-color-warning-light-5: #ecbb82;
+  --el-color-warning-light-7: #f4d6b4;
+  --el-color-warning-light-8: #f7e4cd;
+  --el-color-warning-light-9: #fbf1e6;
+  --el-color-warning-dark-2: #ae5f05;
+
+  --el-color-danger: #dc2626;
+  --el-color-danger-light-3: #e76767;
+  --el-color-danger-light-5: #ee9393;
+  --el-color-danger-light-7: #f5bebe;
+  --el-color-danger-light-8: #f8d4d4;
+  --el-color-danger-light-9: #fbe9e9;
+  --el-color-danger-dark-2: #b01e1e;
+
+  --el-color-error: var(--el-color-danger);
+  --el-color-error-light-3: var(--el-color-danger-light-3);
+  --el-color-error-light-5: var(--el-color-danger-light-5);
+  --el-color-error-light-7: var(--el-color-danger-light-7);
+  --el-color-error-light-8: var(--el-color-danger-light-8);
+  --el-color-error-light-9: var(--el-color-danger-light-9);
+
+  --el-color-info: #64748b;
+  --el-color-info-light-3: #939eae;
+  --el-color-info-light-5: #b2bac5;
+  --el-color-info-light-7: #d1d5dc;
+  --el-color-info-light-8: #e0e3e8;
+  --el-color-info-light-9: #f0f1f3;
+  --el-color-info-dark-2: #505d6f;
+
+  /* Element Plus mapping — surfaces, text, borders, fills ------------------- */
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f6f7f9;
+  --el-bg-color-overlay: #ffffff;
+
+  --el-text-color-primary: #1f2a37;
+  --el-text-color-regular: #475467;
+  --el-text-color-secondary: #667085;
+  --el-text-color-placeholder: #98a2b3;
+  --el-text-color-disabled: #a8b0bc;
+
+  --el-border-color: #e4e7ec;
+  --el-border-color-light: #eef0f3;
+  --el-border-color-lighter: #f2f4f7;
+  --el-border-color-extra-light: #f7f8fa;
+  --el-border-color-dark: #d0d5dd;
+  --el-border-color-darker: #b9c0cc;
+  --el-border-color-hover: #b9c0cc;
+
+  --el-fill-color: #f2f4f7;
+  --el-fill-color-light: #f6f7f9;
+  --el-fill-color-lighter: #f9fafb;
+  --el-fill-color-extra-light: #fcfcfd;
+  --el-fill-color-dark: #eaecf0;
+  --el-fill-color-darker: #e4e7ec;
+  --el-fill-color-blank: #ffffff;
+
+  --el-mask-color: rgba(255, 255, 255, 0.8);
+  --el-overlay-color-lighter: rgba(16, 24, 40, 0.5);
+
+  /* Element Plus mapping — shape, elevation, type --------------------------- */
+  --el-border-radius-base: 10px;
+  --el-border-radius-small: 8px;
+  --el-border-radius-round: 20px;
+  --el-border-radius-circle: 100%;
+
+  --el-box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+  --el-box-shadow-light: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --el-box-shadow-lighter: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --el-box-shadow-dark: 0 12px 32px rgba(16, 24, 40, 0.1);
+
+  --el-font-family: var(--ac-font-sans);
+  --el-font-size-base: 14px;
+
+  /* Element Plus component accents ----------------------------------------- */
+  --el-menu-active-color: var(--el-color-primary);
+  --el-menu-text-color: var(--el-text-color-regular);
+  --el-menu-hover-text-color: var(--ac-ink);
+  --el-menu-bg-color: transparent;
+  --el-menu-hover-bg-color: var(--ac-fill-soft);
+  --el-card-border-color: var(--el-border-color-light);
+  --el-card-border-radius: var(--el-border-radius-base);
 }
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
 
 * {
   box-sizing: border-box;
@@ -17,16 +198,245 @@ body,
 }
 
 body {
-  background: var(--el-fill-color-lighter, #f5f7fa);
+  background: var(--ac-canvas);
+  color: var(--ac-ink);
+  font-family: var(--ac-font-sans);
+  font-size: var(--ac-text-body);
+  line-height: var(--ac-line-height);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Let the chat card fill the main area. */
-.layout__main > * {
+h1,
+h2,
+h3,
+h4 {
+  color: var(--ac-ink);
+  font-family: var(--ac-font-serif);
+  line-height: 1.3;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--ac-font-mono);
+}
+
+::selection {
+  background: var(--el-color-primary-light-7);
+  color: var(--ac-ink);
+}
+
+/* Thin, quiet scrollbars; the rail stays transparent on the page canvas. */
+* {
+  scrollbar-color: var(--ac-scrollbar) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--ac-scrollbar);
+  background-clip: content-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ac-scrollbar-hover);
+  background-clip: content-box;
+}
+
+/* Keyboard focus stays visible everywhere; pointer focus does not add a ring. */
+:focus-visible {
+  outline: 2px solid var(--ac-primary);
+  outline-offset: 2px;
+}
+
+/* Restrained motion: honour the OS preference for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ==========================================================================
+   Shared page primitives
+   Usage:
+     <section class="ac-page">
+       <header class="ac-page-header">
+         <div>
+           <h1 class="ac-page-title">页面标题</h1>
+           <p class="ac-page-description">一句话说明</p>
+         </div>
+         <div class="ac-action-bar">
+           <el-button>次要操作</el-button>
+           <el-button type="primary">主要操作</el-button>
+         </div>
+       </header>
+       <div class="ac-surface-card">…</div>
+       <div class="ac-table-wrapper"><el-table>…</el-table></div>
+     </section>
+   ========================================================================== */
+
+.ac-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ac-space-24);
+  min-width: 0;
+}
+
+.ac-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ac-space-16);
+  min-width: 0;
+}
+
+.ac-page-title {
+  margin: 0;
+  color: var(--ac-ink);
+  font-family: var(--ac-font-serif);
+  font-size: var(--ac-text-title);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ac-page-description {
+  margin: var(--ac-space-4) 0 0;
+  max-width: 72ch;
+  color: var(--ac-text);
+  font-size: var(--ac-text-body);
+  line-height: var(--ac-line-height);
+}
+
+/* Toolbar that groups the actions of a page or a card. */
+.ac-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ac-space-8);
+}
+
+/* White surface with a hairline border and restrained elevation. */
+.ac-surface-card {
+  padding: var(--ac-space-24);
+  min-width: 0;
+  background: var(--ac-surface);
+  border: 1px solid var(--ac-border-soft);
+  border-radius: var(--ac-radius);
+  box-shadow: var(--ac-shadow-sm);
+}
+
+/* Card whose content (usually a table) owns its own padding. */
+.ac-surface-card--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Horizontal scroll region so wide tables never widen the page. */
+.ac-table-wrapper {
+  min-width: 0;
+  overflow-x: auto;
+  background: var(--ac-surface);
+  border: 1px solid var(--ac-border-soft);
+  border-radius: var(--ac-radius);
+}
+
+.ac-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ac-space-4);
+  padding: var(--ac-space-32) var(--ac-space-16);
+  color: var(--ac-muted);
+  font-size: var(--ac-text-body);
+  line-height: var(--ac-line-height);
+  text-align: center;
+}
+
+.ac-empty-state--bordered {
+  background: var(--ac-fill-soft);
+  border: 1px dashed var(--ac-border);
+  border-radius: var(--ac-radius);
+}
+
+.ac-empty-state__title {
+  color: var(--ac-text);
+  font-size: var(--ac-text-body);
+  font-weight: 600;
+}
+
+.ac-empty-state__text {
+  max-width: 40ch;
+  font-size: var(--ac-text-meta);
+  line-height: var(--ac-line-height);
+}
+
+/* Secondary / supporting text. */
+.ac-muted {
+  color: var(--ac-muted);
+}
+
+/* Small label or meta line; never smaller than 12px. */
+.ac-text-meta {
+  color: var(--ac-muted);
+  font-size: var(--ac-text-meta);
+}
+
+/* ==========================================================================
+   Shell bridges
+   ========================================================================== */
+
+/* ChatView fills the shell's main area until the chat workspace restyle. */
+.layout__page--chat > * {
   flex: 1;
   min-height: 0;
 }
 
+/* Legacy chat padding; the shell provides the page gutter. */
 .chat {
-  padding: 16px;
   height: 100%;
+  padding: var(--ac-space-16);
+}
+
+/* ==========================================================================
+   Narrow-viewport guards
+   The shell must never scroll horizontally; the chat workspace restyle owns the
+   final mobile layout, these rules only keep the current header inside the card.
+   ========================================================================== */
+
+@media (max-width: 767px) {
+  .chat .chat__header {
+    flex-wrap: wrap;
+    gap: var(--ac-space-8);
+  }
+
+  .chat .chat__header-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .chat .chat__datasource {
+    flex: 1 1 180px;
+    width: auto;
+    min-width: 0;
+  }
 }
