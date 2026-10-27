@@ -26,9 +26,9 @@ const loadingHistory = ref(false)
 const streamedConversationId = ref<string | null>(null)
 
 const examples = [
-  '统计每个城市的订单总金额，按金额倒序',
-  '找出 2024 年最畅销的 10 个商品',
-  '查询注册后从未下单的用户',
+  '1班和2班的数学平均分分别是多少',
+  '我的各科成绩',
+  '统计每个班的考勤异常次数',
 ]
 
 const canSend = computed(() => draft.value.trim().length > 0 && !chat.streaming)

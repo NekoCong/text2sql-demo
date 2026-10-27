@@ -3,8 +3,25 @@ import { ref } from 'vue'
 import type { ChatMessage, ConversationEvent, Datasource } from '@/types'
 import { listDatasources, streamAgent, streamText2Sql } from '@/api/text2sql'
 
+/**
+ * Generates a client-side message id.
+ *
+ * `crypto.randomUUID()` only exists in secure contexts, so the demo (served over plain
+ * HTTP) falls back to `getRandomValues`, and only then to `Math.random`.
+ */
 function newId(): string {
-  return crypto.randomUUID()
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  const bytes = new Uint8Array(16)
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes)
+  } else {
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = Math.floor(Math.random() * 256)
+    }
+  }
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 /** Appends an error line without discarding partial output already streamed. */
