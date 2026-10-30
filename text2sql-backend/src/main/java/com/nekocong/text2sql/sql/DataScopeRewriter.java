@@ -3,11 +3,13 @@ package com.nekocong.text2sql.sql;
 import com.nekocong.text2sql.security.DataScope;
 import com.nekocong.text2sql.security.SqlPermissionException;
 import com.nekocong.text2sql.security.TablePolicy;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+
 import net.sf.jsqlparser.expression.Alias;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.ExpressionVisitorAdapter;
@@ -59,7 +61,7 @@ public class DataScopeRewriter {
     /**
      * Rewrites a statement for the caller's scope.
      *
-     * @param sql the validated, read-only SQL
+     * @param sql   the validated, read-only SQL
      * @param scope the caller's scope
      * @return the enforced SQL (identical to the input for admins)
      * @throws SqlPermissionException when the query cannot be safely scoped
@@ -101,21 +103,22 @@ public class DataScopeRewriter {
             }
         }
 
-        if (select instanceof PlainSelect plain) {
-            rewritePlainSelect(plain, scope, ctes);
-        } else if (select instanceof SetOperationList setOperation) {
-            for (Select branch : setOperation.getSelects()) {
-                rewriteSelect(branch, scope, ctes);
+        switch (select) {
+            case PlainSelect plain -> rewritePlainSelect(plain, scope, ctes);
+            case SetOperationList setOperation -> {
+                for (Select branch : setOperation.getSelects()) {
+                    rewriteSelect(branch, scope, ctes);
+                }
+                rewriteOrderBy(setOperation.getOrderByElements(), scope, ctes);
             }
-            rewriteOrderBy(setOperation.getOrderByElements(), scope, ctes);
-        } else if (select instanceof ParenthesedSelect parenthesed) {
-            rewriteSelect(parenthesed.getSelect(), scope, ctes);
-            rewriteOrderBy(parenthesed.getOrderByElements(), scope, ctes);
-        } else if (select instanceof Values) {
-            // A VALUES list can carry scalar subqueries; rejecting it keeps enforcement total.
-            throw new SqlPermissionException("不支持 VALUES 查询，无法应用数据权限");
-        } else {
-            throw new SqlPermissionException("不支持该查询结构，无法应用数据权限");
+            case ParenthesedSelect parenthesed -> {
+                rewriteSelect(parenthesed.getSelect(), scope, ctes);
+                rewriteOrderBy(parenthesed.getOrderByElements(), scope, ctes);
+            }
+            case Values _ ->
+                // A VALUES list can carry scalar subqueries; rejecting it keeps enforcement total.
+                    throw new SqlPermissionException("不支持 VALUES 查询，无法应用数据权限");
+            default -> throw new SqlPermissionException("不支持该查询结构，无法应用数据权限");
         }
     }
 
@@ -161,30 +164,34 @@ public class DataScopeRewriter {
 
     private FromItem rewriteFromItem(
             FromItem item, DataScope scope, Set<String> ctes, Set<String> aliases) {
-        if (item == null) {
-            return null;
-        }
-        if (item instanceof Table table) {
-            return rewriteTable(table, scope, ctes, aliases);
-        }
-        if (item instanceof ParenthesedSelect parenthesed) {
-            // Pass the parenthesized select itself: its own ORDER BY / WITH list must be visited too.
-            rewriteSelect(parenthesed, scope, ctes);
-            return item;
-        }
-        if (item instanceof ParenthesedFromItem parenthesed) {
-            parenthesed.setFromItem(rewriteFromItem(parenthesed.getFromItem(), scope, ctes, aliases));
-            if (parenthesed.getJoins() != null) {
-                for (Join join : parenthesed.getJoins()) {
-                    join.setRightItem(rewriteFromItem(join.getRightItem(), scope, ctes, aliases));
-                    if (join.getOnExpressions() != null) {
-                        for (Expression on : join.getOnExpressions()) {
-                            rewriteExpression(on, scope, ctes);
+        switch (item) {
+            case null -> {
+                return null;
+            }
+            case Table table -> {
+                return rewriteTable(table, scope, ctes, aliases);
+            }
+            case ParenthesedSelect parenthesed -> {
+                // Pass the parenthesized select itself: its own ORDER BY / WITH list must be visited too.
+                rewriteSelect(parenthesed, scope, ctes);
+                return item;
+            }
+            case ParenthesedFromItem parenthesed -> {
+                parenthesed.setFromItem(rewriteFromItem(parenthesed.getFromItem(), scope, ctes, aliases));
+                if (parenthesed.getJoins() != null) {
+                    for (Join join : parenthesed.getJoins()) {
+                        join.setRightItem(rewriteFromItem(join.getRightItem(), scope, ctes, aliases));
+                        if (join.getOnExpressions() != null) {
+                            for (Expression on : join.getOnExpressions()) {
+                                rewriteExpression(on, scope, ctes);
+                            }
                         }
                     }
                 }
+                return item;
             }
-            return item;
+            default -> {
+            }
         }
         throw new SqlPermissionException("不支持该表引用形式，无法应用数据权限");
     }
